@@ -7,29 +7,29 @@ import {
 } from "./config";
 import { createResourceServer } from "./resourceServer";
 
-// 1リクエストで受け付ける最大ユニット数(BigInt計算の入力を制限する)
+// Maximum units accepted per request (bounds the input to BigInt calculations)
 const MAX_UNITS = 1000;
 
-/** x402で課金されるHonoアプリを作成する */
+/** Creates a Hono app with x402-protected routes. */
 export const createApp = (env: ServerEnv): Hono => {
-  // 設定の不足・不正はここで検出する
+  // Detect missing or invalid configuration here
   const { chainId, pricing } = resolveServerConfig(env);
 
-  // Honoインスタンスの作成
+  // Create the Hono instance
   const app = new Hono();
 
-  // ===== STEP 2: x402ミドルウェア =====
-  // ワークショップのStep 1ではこのブロックをコメントアウトして起動する(課金されず、誰でもアクセスできる)。
-  // Step 2でコメントアウトを外すと、402チャレンジ→署名→検証→決済のフローが有効になる。
+  // ===== STEP 2: x402 middleware =====
+  // In workshop Step 1, comment out this block before starting (access is public and free).
+  // In Step 2, uncomment it to enable the 402 challenge -> signature -> verification -> settlement flow.
   app.use(
     paymentMiddleware(
       createX402Config(env),
       createResourceServer(env.FACILITATOR_URL, chainId),
     ),
   );
-  // ===== STEP 2 ここまで =====
+  // ===== End of STEP 2 =====
 
-  // エンドポイントの設定
+  // Configure endpoints
   app.get("/health", (c) => {
     return c.json({
       report: {
@@ -48,10 +48,10 @@ export const createApp = (env: ServerEnv): Hono => {
   });
 
   /**
-   * 使用量課金(upto)のサンプル
-   * units × 単価を実際の決済額として指定する。
-   * 検証のため、認可上限(USAGE_MAX_AMOUNT)を超える場合も丸めずにそのまま指定する。
-   * 上限超過の決済はPermit2/facilitator側で拒否されることを確認するための挙動。
+   * Usage-based billing (upto) example.
+   * Uses units x unit price as the actual settlement amount.
+   * For validation, amounts above the authorization cap (USAGE_MAX_AMOUNT) are passed through without clamping.
+   * This behavior demonstrates that Permit2/the facilitator rejects settlements above the cap.
    */
   app.get("/usage", (c) => {
     const units = Number(c.req.query("units") ?? "1");

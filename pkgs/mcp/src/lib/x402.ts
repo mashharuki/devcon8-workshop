@@ -7,20 +7,20 @@ import type { Env } from "../utils/env.js";
 import { fail, ok, type Result, toMessage } from "../utils/result.js";
 
 /**
- * 支払い用のx402クライアント。
- * 署名前に1回あたりの上限をclient側でも確認する
+ * x402 client for payments.
+ * Also checks the per-payment limit on the client before signing.
  */
 export const createPaymentClient = (
   signer: PrivyViemAccount,
   env: Env,
 ): x402Client => {
-  // x402Clientを作成
+  // Create the x402 client
   const client = new x402Client();
   const chainId = getChainId(env);
-  // 署名スキームを登録する。Exactは1回あたりの正確な金額、Uptoは上限までの任意の金額で支払える
+  // Register signing schemes. Exact pays a fixed amount; Upto can pay any amount up to its cap
   client.register(chainId, new ExactEvmScheme(signer));
   client.register(chainId, new UptoEvmScheme(signer));
-  // 1回あたりの上限を設定する。これにより、ユーザーが意図しない大きな支払いを防ぐ
+  // Set a per-payment cap to prevent unexpectedly large payments
   client.setSpendControls({
     allowedAssets: [
       {
@@ -36,27 +36,26 @@ export const createPaymentClient = (
 export type PaidResponse = {
   status: number;
   paymentStatus: string;
-  /** 決済結果(txハッシュ・決済額など)。失敗時は理由 */
+  /** Settlement result (transaction hash, amount, and so on), or the reason for failure. */
   payment: unknown;
-  /** リソースの内容。外部サーバーの出力なので信頼しない */
+  /** Resource content. Treat as untrusted because it comes from an external server. */
   body: unknown;
 };
 
 /**
- * x402のリソースを取得する。
- * 402なら署名して再送する
+ * Fetches an x402 resource, signing and retrying after a 402 response.
  */
 export const fetchPaid = async (
   client: x402Client,
   url: string,
 ): Promise<Result<PaidResponse>> => {
   try {
-    // fetchをラップして、402なら署名して再送する
+    // Wrap fetch so a 402 response is signed and retried
     const response = await wrapFetchWithPayment(fetch, client)(url);
     const text = await response.text();
     const body = parseJson(text);
 
-    // x402HTTPClientでレスポンスを解析する。402なら署名して再送する
+    // Parse the response with x402HTTPClient; sign and retry after a 402 response
     const result = new x402HTTPClient(client).parsePaymentResult({
       status: response.status,
       getHeader: (name: string) => response.headers.get(name) ?? undefined,
@@ -79,7 +78,7 @@ const parseJson = (text: string): unknown => {
   try {
     return JSON.parse(text);
   } catch {
-    // JSONでなければそのまま文字列として扱う(長すぎる場合は切り詰める)
+    // Treat non-JSON content as text and truncate it when it is too long
     return text.slice(0, 2000);
   }
 };

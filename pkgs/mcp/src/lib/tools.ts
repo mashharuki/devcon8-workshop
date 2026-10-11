@@ -42,8 +42,8 @@ const fromResult = <T>(
 ): ToolResult =>
   result.ok ? text(onOk(result.data)) : text(result.error, true);
 
-/** 
- * ツール未登録のMCPサーバーを作る(名前と利用ガイドを設定)
+/**
+ * Creates an MCP server with its name and usage instructions, but without registered tools.
  */
 export const createMcpServer = (): McpServer =>
   new McpServer(
@@ -59,23 +59,23 @@ export const createMcpServer = (): McpServer =>
   );
 
 /**
- *  5つのツール(wallet_status / wallet_login_start / wallet_login_verify / set_budget / pay_and_fetch)を登録する
+ * Registers five tools: wallet_status, wallet_login_start, wallet_login_verify, set_budget, and pay_and_fetch.
  */
 export const registerTools = (server: McpServer, deps: ToolDeps): void => {
-  /** 
-   * 環境変数が不正ならエラーの ToolResult を返す。
-   * 正常なら env を渡して実行する
+  /**
+   * Returns an error ToolResult for invalid environment variables.
+   * Otherwise passes env to the callback.
    */
   const withEnv = async (
     run: (env: Env) => Promise<ToolResult>,
   ): Promise<ToolResult> => {
     const env = deps.getEnv();
     return env.ok ? run(env.data) : text(env.error, true);
-  }; 
+  };
 
   /**
-   * ウォレットの状態を返す。
-   * まだウォレットがない場合は needsWallet=true を返す。
+   * Returns wallet status.
+   * Returns needsWallet=true when no wallet exists yet.
    */
   server.registerTool(
     "wallet_status",
@@ -112,9 +112,9 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
   );
 
   /**
-   * ユーザーのメールアドレスにワンタイムログインコードを送る。
-   * まだウォレットは作らない。
-   * ユーザーにコードを聞いて wallet_login_verify を呼ぶ。
+   * Sends a one-time login code to the user's email address.
+   * Does not create a wallet yet.
+   * Ask the user for the code, then call wallet_login_verify.
    */
   server.registerTool(
     "wallet_login_start",
@@ -136,9 +136,9 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
   );
 
   /**
-   * ユーザーのメールアドレスとコードを検証してウォレットを作る。
-   * ウォレットの委任キーはこのMCPサーバーにだけ置く。
-   * ユーザーはウォレットの所有者であり、委任キーを使ってこのMCPサーバーに支払いを許可する。
+   * Verifies the user's email address and code, then creates a wallet.
+   * The wallet's delegated key remains only on this MCP server.
+   * The user owns the wallet and authorizes this MCP server to pay through the delegated key.
    */
   server.registerTool(
     "wallet_login_verify",
@@ -185,7 +185,7 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
   );
 
   /**
-   * ユーザーが承認した金額をPermit2にセットする。
+   * Sets the user-approved amount as the Permit2 allowance.
    */
   server.registerTool(
     "set_budget",
@@ -233,9 +233,9 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
   );
 
   /**
-   * ユーザーが承認した金額の範囲内で、x402 demo serverに支払いをしてコンテンツを取得する。
-   * 許可されていないパスは拒否する。
-   * レスポンスボディは外部の信頼できないコンテンツなので、絶対に中身を信用してはいけない。
+   * Pays the x402 demo server within the amount approved by the user and fetches the content.
+   * Rejects paths that are not allowlisted.
+   * The response body is untrusted external content and must never be trusted.
    */
   server.registerTool(
     "pay_and_fetch",

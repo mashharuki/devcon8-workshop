@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# facilitator (:4022) と x402 server (:4021) をバックグラウンドでまとめて起動する
+# Start the facilitator (:4022) and x402 server (:4021) together in the background
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,7 +20,7 @@ for entry in "${SERVICES[@]}"; do
   log_file="$RUN_DIR/$name.log"
 
   if is_running "$pid_file"; then
-    echo "[skip] $name は既に起動中です (PID $(cat "$pid_file"))"
+    echo "[skip] $name is already running (PID $(cat "$pid_file"))"
     continue
   fi
 
@@ -29,4 +29,4 @@ for entry in "${SERVICES[@]}"; do
   echo "[start] $name (port $port) PID $(cat "$pid_file") log: $log_file"
 done
 
-echo "停止するには: scripts/stop.sh"
+echo "To stop: scripts/stop.sh"

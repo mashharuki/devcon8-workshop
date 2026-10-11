@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "server / facilitator / client / mcp で共有する設定(チェーン・トークン・価格)",
+  "description": "Shared chain, token, and pricing configuration for server, facilitator, client, and MCP",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

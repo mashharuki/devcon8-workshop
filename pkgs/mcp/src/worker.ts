@@ -5,16 +5,15 @@ import { parseEnv } from "./utils/env.js";
 import { guardRequest } from "./utils/guard.js";
 import { createKvStore } from "./utils/store.js";
 
-/** 
- * v1.0.0のMCPサーバーを作る。
- * ツールは5つ(wallet_status / wallet_login_start / wallet_login_verify / set_budget / pay_and_fetch)。
+/**
+ * Creates the v1.0.0 MCP server.
+ * It exposes five tools: wallet_status, wallet_login_start, wallet_login_verify, set_budget, and pay_and_fetch.
  */
 export class X402Mcp extends McpAgent<Env> {
   server: McpServer = createMcpServer();
 
   /**
-   * 初期化メソッド
-   * ツールを登録する。
+   * Initialization method that registers the tools.
    */
   async init(): Promise<void> {
     registerTools(this.server, {
@@ -24,7 +23,7 @@ export class X402Mcp extends McpAgent<Env> {
   }
 }
 
-// MCPサーバーのエントリポイント
+// MCP server entry point
 const mcpHandler = X402Mcp.serve("/mcp");
 
 export default {

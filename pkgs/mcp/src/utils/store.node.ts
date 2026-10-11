@@ -11,7 +11,7 @@ import {
 const stateFile = (home: string | undefined): string =>
   join(home ?? join(homedir(), ".x402mcp"), "wallet.json");
 
-/** 保存済みのウォレット情報を読む。未作成なら data は undefined */
+/** Reads saved wallet data; data is undefined when no wallet has been created. */
 export const loadWalletState = async (
   home: string | undefined,
 ): Promise<Result<WalletState | undefined>> => {
@@ -32,7 +32,7 @@ export const loadWalletState = async (
     : fail(`invalid wallet state file: ${file}`);
 };
 
-/** ウォレット情報を保存する(ディレクトリ 0700 / ファイル 0600) */
+/** Saves wallet data using directory mode 0700 and file mode 0600. */
 export const saveWalletState = async (
   home: string | undefined,
   state: WalletState,
@@ -48,7 +48,7 @@ export const saveWalletState = async (
   }
 };
 
-/** ローカルのファイルに保存するストア(stdio用) */
+/** File-backed local store for stdio. */
 export const createFileStore = (home: string | undefined): WalletStore => ({
   load: () => loadWalletState(home),
   save: (state) => saveWalletState(home, state),

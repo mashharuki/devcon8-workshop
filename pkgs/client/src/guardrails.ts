@@ -8,26 +8,27 @@ import axios, { type AxiosResponse } from "axios";
 import { createPaymentClient } from "./config";
 
 /**
- * uptoスキームのガードレール検証スクリプト
+ * Guardrail validation script for the upto scheme.
  *
- * 前提: facilitator / server を起動済みで、`pnpm x402client run approve <amount> --execute`
- *       でPermit2へのallowanceを設定済みであること。
+ * Prerequisites: the facilitator and server are running, and the Permit2 allowance has been set with
+ * `pnpm x402client run approve <amount> --execute`.
  *
- * シナリオ:
- *   1. 上限内の使用量   → 使用量ぶんだけ決済される
- *   2. 上限を超える指定 → 支払いは送られるが、serverが上限超の決済を指定しても決済が成立しない
- *   3. client側の上限   → serverの認可上限がclientの許容額を超えるので、署名前(支払い送信前)に拒否される
+ * Scenarios:
+ *   1. Usage within the cap -> only the amount used is settled.
+ *   2. Amount above the cap -> payment is submitted, but settlement fails when the server requests too much.
+ *   3. Client-side cap -> rejected before signing (and before payment submission) because the server's
+ *      authorization cap exceeds the client's limit.
  *
- * allowance不足の確認は `approve 0 --execute` で承認を取り消してから本スクリプトを実行する。
+ * To test insufficient allowance, revoke approval with `approve 0 --execute` before running this script.
  *
- * 注意: @x402/axios は402を「axiosのエラー」として処理するため、validateStatusは上書きしない。
+ * Note: @x402/axios handles 402 as an Axios error, so do not override validateStatus.
  */
 
 type ScenarioResult =
   | { ok: true; detail: string }
   | { ok: false; detail: string };
 
-// requests: axiosが送ったリクエスト数(1 = 初回のみ / 2 = 支払いを付けて再送した)
+// requests: number of requests sent by Axios (1 = initial request only / 2 = retried with payment)
 type UsageOutcome = { requests: number } & (
   | {
       kind: "response";
@@ -41,7 +42,7 @@ type UsageOutcome = { requests: number } & (
 
 const BASE_URL = process.env.PAYWALL_API_BASE_URL;
 
-/** axiosのレスポンスから決済結果を取り出す */
+/** Extracts the settlement result from an Axios response. */
 const toResponseOutcome = (
   client: x402Client,
   response: AxiosResponse,
@@ -63,7 +64,7 @@ const toResponseOutcome = (
   };
 };
 
-/** 指定した上限のクライアントで /usage を呼び、結果を返す(想定内の失敗も例外にしない) */
+/** Calls /usage with a client configured for the given cap and returns expected failures as values. */
 const requestUsage = async (
   units: number,
   maxAmountPerPayment?: string,
@@ -81,17 +82,17 @@ const requestUsage = async (
     const response = await api.get(`/usage?units=${units}`);
     return toResponseOutcome(client, response, requests);
   } catch (error) {
-    // 支払いを付けて再送した後に失敗した場合(verify/settle失敗など)は、レスポンス付きのAxiosErrorになる
+    // A failure after retrying with payment (such as verify/settle failure) is an AxiosError with a response
     if (axios.isAxiosError(error) && error.response) {
       return toResponseOutcome(client, error.response, requests);
     }
-    // それ以外は署名前のclient側の拒否など("Failed to create payment payload: ...")
+    // Other failures include client-side rejection before signing ("Failed to create payment payload: ...")
     const message = error instanceof Error ? error.message : String(error);
     return { kind: "client_error", requests, message };
   }
 };
 
-/** 1. 上限内: 3ユニット(0.3 USDC) <= 上限(0.5 USDC) */
+/** 1. Within the cap: 3 units (0.3 USDC) <= cap (0.5 USDC). */
 const runWithinCap = async (): Promise<ScenarioResult> => {
   const res = await requestUsage(3);
   console.dir(res, { depth: null });
@@ -103,56 +104,65 @@ const runWithinCap = async (): Promise<ScenarioResult> => {
   return isSettled
     ? {
         ok: true,
-        detail: "決済成立(settled)。決済額は header の amount を確認",
+        detail: "Settlement succeeded. Check the amount in the header.",
       }
-    : { ok: false, detail: "決済が成立しなかった。上のログを確認" };
+    : { ok: false, detail: "Settlement failed. Check the log above." };
 };
 
-/** 2. 上限超過: 10ユニット(1.0 USDC) > 上限(0.5 USDC)。serverは丸めずに指定する */
+/** 2. Above the cap: 10 units (1.0 USDC) > cap (0.5 USDC). The server does not clamp the amount. */
 const runOverCap = async (): Promise<ScenarioResult> => {
   const res = await requestUsage(10);
   console.dir(res, { depth: null });
 
-  // 支払いが送られていない(requests < 2)場合は、上限で拒否されたのではないので成功扱いにしない
+  // If payment was not sent (requests < 2), the cap did not cause the rejection, so do not count it as success
   const isPaymentSent = res.requests >= 2;
   if (!isPaymentSent) {
-    return { ok: false, detail: "支払いが送られなかったため判定できない" };
+    return {
+      ok: false,
+      detail: "Cannot determine the result because payment was not sent.",
+    };
   }
   if (res.kind !== "response") {
-    return { ok: false, detail: `想定外のclientエラー: ${res.message}` };
+    return { ok: false, detail: `Unexpected client error: ${res.message}` };
   }
   if (res.paymentStatus === "settled") {
-    return { ok: false, detail: "上限を超える決済が成立してしまった" };
+    return {
+      ok: false,
+      detail: "A settlement above the cap unexpectedly succeeded.",
+    };
   }
 
-  // verify失敗(412: allowance不足など)を上限による拒否と取り違えないよう、理由まで確認する
+  // Check the reason so a verify failure (such as 412 for insufficient allowance) is not mistaken for cap rejection
   const errorReason = (res.header as { errorReason?: string } | undefined)
     ?.errorReason;
   return errorReason?.includes("settlement_exceeds_amount")
-    ? { ok: true, detail: `上限超過で決済が拒否された: ${errorReason}` }
+    ? {
+        ok: true,
+        detail: `Settlement was rejected for exceeding the cap: ${errorReason}`,
+      }
     : {
         ok: false,
-        detail: `決済は成立しなかったが、上限超過が理由か確認できない (status ${res.status}, reason ${errorReason ?? "なし"})`,
+        detail: `Settlement failed, but exceeding the cap could not be confirmed as the reason (status ${res.status}, reason ${errorReason ?? "none"})`,
       };
 };
 
-/** 3. client側の上限: 許容額(0.1 USDC)を、serverの認可上限(0.5 USDC)が超えている */
+/** 3. Client-side cap: the server's authorization cap (0.5 USDC) exceeds the client limit (0.1 USDC). */
 const runClientCap = async (): Promise<ScenarioResult> => {
   const res = await requestUsage(1, "100000");
   console.dir(res, { depth: null });
 
-  // 初回のみ(requests === 1)で、client側のエラーになっていれば、署名前に拒否されている
+  // A client-side error after only the initial request (requests === 1) means rejection occurred before signing
   const isRejectedBeforeSigning =
     res.kind === "client_error" && res.requests === 1;
   return isRejectedBeforeSigning
-    ? { ok: true, detail: `署名前に拒否された: ${res.message}` }
-    : { ok: false, detail: "署名前に拒否されなかった" };
+    ? { ok: true, detail: `Rejected before signing: ${res.message}` }
+    : { ok: false, detail: "The request was not rejected before signing." };
 };
 
 const scenarios: Array<[string, () => Promise<ScenarioResult>]> = [
-  ["1. 上限内の使用量", runWithinCap],
-  ["2. 上限を超える決済指定", runOverCap],
-  ["3. client側の上限による拒否", runClientCap],
+  ["1. Usage within the cap", runWithinCap],
+  ["2. Settlement request above the cap", runOverCap],
+  ["3. Rejection by the client-side cap", runClientCap],
 ];
 
 const main = async (): Promise<void> => {

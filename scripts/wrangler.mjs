@@ -1,11 +1,11 @@
-// wrangler dev / deploy に、共有設定(pkgs/config/.env)の値を --var で渡して実行する。
-// 使い方(各パッケージの package.json から呼ぶ): node ../../scripts/wrangler.mjs <dev|deploy> [wranglerの引数...]
-// Workers には .env が無いため、チェーン・トークン・価格をここで注入する。値は公開してよいものだけ。
+// Run wrangler dev/deploy with values from the shared configuration (pkgs/config/.env) passed through --var.
+// Usage (from each package.json): node ../../scripts/wrangler.mjs <dev|deploy> [wrangler arguments...]
+// Workers do not have .env files, so inject the chain, token, and pricing here. Include only public values.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// 既定は pkgs/config/.env。別のファイルを使いたいとき(CIなど)は SHARED_ENV_FILE で指定する
+// Defaults to pkgs/config/.env. Set SHARED_ENV_FILE to use another file, such as in CI
 const envPath =
   process.env.SHARED_ENV_FILE ??
   fileURLToPath(new URL("../pkgs/config/.env", import.meta.url));
@@ -28,7 +28,7 @@ const parseEnvFile = (text) =>
 
 if (!existsSync(envPath)) {
   console.error(
-    "pkgs/config/.env が見つかりません。`pnpm setup` を実行するか、pkgs/config/.env.example をコピーしてください",
+    "pkgs/config/.env was not found. Run `pnpm setup` or copy pkgs/config/.env.example.",
   );
   process.exit(1);
 }

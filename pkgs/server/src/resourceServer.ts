@@ -3,7 +3,7 @@ import { UptoEvmScheme } from "@x402/evm/upto/server";
 import { x402ResourceServer } from "@x402/hono";
 import { createFacilitatorClient } from "./facilitator";
 
-// リソースサーバーを作成し、対象チェーンに固定額決済(exact)と使用量課金(upto)のスキームを登録
+// Create the resource server and register fixed-price (exact) and usage-based (upto) schemes for the target chain
 export const createResourceServer = (
   facilitatorUrl: string,
   chainId: `${string}:${string}`,

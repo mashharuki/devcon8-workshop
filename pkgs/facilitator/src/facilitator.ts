@@ -6,13 +6,13 @@ import { createEvmSigner } from "./viem.js";
 
 export type FacilitatorEnv = {
   EVM_PRIVATE_KEY: string;
-  /** viem/chains のエクスポート名(例: arcTestnet)。pkgs/config で解釈する */
+  /** Export name from viem/chains (for example, arcTestnet), parsed by pkgs/config. */
   CHAIN_NAME: string;
-  /** 省略時はチェーン既定のRPC */
+  /** Uses the chain's default RPC when omitted. */
   RPC_URL?: string;
 };
 
-/** フックのログに出してよい最小限のフィールド(署名・ペイロード本体は出さない) */
+/** Minimal fields safe to include in hook logs; excludes signatures and complete payloads. */
 type HookContext = {
   requirements?: { scheme?: string; network?: string; amount?: string };
   result?: { success?: boolean; transaction?: string; errorReason?: string };
@@ -36,7 +36,7 @@ const logStage = (stage: string, context: object): void => {
   console.log(`================ ${stage} ================`, summarize(context));
 };
 
-/** ファシリテーターインスタンスを生成し、exact / upto スキームを登録する */
+/** Creates a facilitator instance and registers the exact and upto schemes. */
 export const createFacilitator = (env: FacilitatorEnv): x402Facilitator => {
   const evmSigner = createEvmSigner(
     env.EVM_PRIVATE_KEY as `0x${string}`,

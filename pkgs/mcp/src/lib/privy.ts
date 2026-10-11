@@ -7,7 +7,7 @@ import { fail, ok, type Result, toMessage } from "../utils/result.js";
 import type { WalletState } from "../utils/store.js";
 import { buildPolicy } from "./policy.js";
 
-/** js-sdk-core が要求する Storage の最小実装(ブラウザ外なのでメモリ上に持つ) */
+/** Minimal Storage implementation required by js-sdk-core; kept in memory outside a browser. */
 class MemoryStorage {
   private readonly map = new Map<string, unknown>();
   get(key: string): unknown {
@@ -28,13 +28,13 @@ export const createPrivyClient = (env: Env): PrivyClient =>
   new PrivyClient({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET });
 
 /**
- * js-sdk-core はブラウザ前提でOriginを自前では付けない。
- * Node ではPrivyから "Must specify origin" で拒否されるため、privy.io宛のリクエストにだけ付与する
+ * js-sdk-core assumes a browser and does not add Origin itself.
+ * In Node, Privy rejects requests with "Must specify origin", so add it only for privy.io requests.
  */
 let isOriginHeaderInstalled = false;
 
 /**
- * Originヘッダーをインストールする。
+ * Installs the Origin header.
  * @param origin
  * @returns
  */
@@ -57,7 +57,7 @@ const installOriginHeader = (origin: string): void => {
 };
 
 /**
- * メールOTPログイン用のクライアント(画面なしで動かす)
+ * Client for email OTP login without a UI.
  */
 export const createAuthClient = (env: Env): Privy => {
   installOriginHeader(env.PRIVY_ORIGIN);
@@ -69,9 +69,9 @@ export const createAuthClient = (env: Env): Privy => {
 };
 
 /**
- * ワンタイムパスワード(OTP)をメールで送信する。
- * 送信後は verifyLoginCode で検証する。
- * 失敗した場合は、ユーザーに再送を促す。
+ * Sends a one-time password (OTP) by email.
+ * Verify it with verifyLoginCode after sending.
+ * If sending fails, ask the user to try again.
  * @param auth
  * @param email
  * @returns
@@ -81,7 +81,7 @@ export const sendLoginCode = async (
   email: string,
 ): Promise<Result<null>> => {
   try {
-    // 送信に成功しても、ユーザーが入力したメールアドレスが存在するかは返さない
+    // A successful send does not reveal whether the email address entered by the user exists
     await auth.auth.email.sendCode(email);
     return ok(null);
   } catch (error) {
@@ -93,9 +93,9 @@ export const sendLoginCode = async (
 export type LoginSession = { userId: string };
 
 /**
- * OTPを検証してログインする。
- * ユーザー本人であることの確認だけに使い、ユーザーのJWTは保持しない
- * (ウォレット作成はアプリの認証情報で行い、所有者にこのユーザーを指定する)
+ * Verifies the OTP and signs in.
+ * This only confirms the user's identity; the user's JWT is not retained.
+ * Wallet creation uses the app credentials and assigns this user as the owner.
  */
 export const verifyLoginCode = async (
   auth: Privy,
@@ -103,7 +103,7 @@ export const verifyLoginCode = async (
   code: string,
 ): Promise<Result<LoginSession>> => {
   try {
-    // 成功するとユーザーIDを含むセッションが返る
+    // Success returns a session containing the user ID
     const session = await auth.auth.email.loginWithCode(email, code);
     return ok({ userId: session.user.id });
   } catch (error) {
@@ -116,8 +116,8 @@ const toBase64 = (buffer: ArrayBuffer): string =>
   btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
 /**
- * 委任キー(P-256)を生成する。
- * 公開鍵は base64 DER(SPKI)、秘密鍵は base64 PKCS8
+ * Generates a delegated key (P-256).
+ * The public key is base64 DER (SPKI), and the private key is base64 PKCS8.
  */
 const generateDelegateKey = async (): Promise<{
   publicKey: string;
@@ -136,11 +136,11 @@ const generateDelegateKey = async (): Promise<{
 };
 
 /**
- * ユーザー所有のウォレットを作成し、ポリシー付きの委任キーを追加署名者として登録する。
- * 1. 委任キーをローカルで生成(この端末のこのユーザー固有)
- * 2. 公開鍵を key quorum として登録
- * 3. ポリシーを作成(送金先・上限・チェーンを制限)
- * 4. ウォレットを作成(owner = ユーザー)。委任キーにはポリシーを上書き適用
+ * Creates a user-owned wallet and registers a policy-bound delegated key as an additional signer.
+ * 1. Generate a delegated key locally, unique to this user on this device.
+ * 2. Register the public key as a key quorum.
+ * 3. Create a policy that restricts destinations, limits, and the chain.
+ * 4. Create the wallet (owner = user) and apply the policy override to the delegated key.
  */
 export const provisionWallet = async (
   privy: PrivyClient,
@@ -149,17 +149,17 @@ export const provisionWallet = async (
   session: LoginSession,
 ): Promise<Result<WalletState>> => {
   try {
-    // 委任キーを生成して、quorum とポリシーを作成し、ウォレットに追加する
+    // Generate the delegated key, create its quorum and policy, and add it to the wallet
     const delegate = await generateDelegateKey();
 
     const quorum = await privy.keyQuorums().create({
-      // Privyの上限は50文字。did:privy:... は長いので末尾だけ使う
+      // Privy's limit is 50 characters; did:privy:... is long, so use only its suffix
       display_name: `x402 delegate ${session.userId.slice(-20)}`,
       public_keys: [delegate.publicKey],
       authorization_threshold: 1,
     });
 
-    // ポリシーを作成して、委任キーに適用する
+    // Create the policy and apply it to the delegated key
     const policy = await privy.policies().create(
       buildPolicy({
         chainId: getChain(env).id,
@@ -169,7 +169,7 @@ export const provisionWallet = async (
       }),
     );
 
-    // ウォレットを作成(owner = ユーザー)。委任キーにはポリシーを上書き適用
+    // Create the wallet (owner = user) and apply the policy override to the delegated key
     const wallet = await privy.wallets().create({
       chain_type: "ethereum",
       owner: { user_id: session.userId },
@@ -194,8 +194,8 @@ export const provisionWallet = async (
 };
 
 /**
- * 委任キーで署名する viem アカウント。
- * 署名のたびにPrivy側でポリシーが評価される
+ * A viem account that signs with the delegated key.
+ * Privy evaluates the policy for every signature.
  */
 export const createSignerAccount = (
   privy: PrivyClient,

@@ -1,123 +1,123 @@
-# x402 × Arc ハンズオン：Cloudflare Workersで作る、自然言語で動くAIエージェント決済
+# x402 x Arc Hands-on Workshop: Natural-Language AI Agent Payments on Cloudflare Workers
 
-## このワークショップで作るもの
+## What You Will Build
 
-**「AIエージェントに、自然言語で『この有料APIを使って』と頼むと、自動で代金を支払ってデータを取ってきてくれる」仕組み**を、自分の手で作ります。
+In this workshop, you will build a system where **you can ask an AI agent in natural language to use a paid API, and it will automatically pay for and retrieve the data**.
 
-使う技術は次の通りです。
+We will use the following technologies:
 
-| 技術 | 役割 |
+| Technology | Role |
 |---|---|
-| **x402** | HTTPの`402 Payment Required`を使った、APIの支払いプロトコル |
-| **Arc（テストネット）** | 決済に使うブロックチェーン。ガス代も決済もUSDCで払う |
-| **Privy** | AIエージェント用のウォレットを、メールログインで作る |
-| **Cloudflare Workers** | 3つのサーバーを動かす場所 |
-| **MCP** | Claude CodeなどのAIエージェントから、ウォレットや支払いを呼び出す仕組み |
+| **x402** | An API payment protocol built around HTTP `402 Payment Required` |
+| **Arc Testnet** | The blockchain used for settlement; both gas and payments are paid in USDC |
+| **Privy** | Creates an AI agent wallet through email login |
+| **Cloudflare Workers** | Hosts the three servers |
+| **MCP** | Lets AI agents such as Claude Code access the wallet and payment features |
 
-作るものは、次の**4つのプログラム**です。
+You will build these **four programs**:
 
-| 名前 | 役割 |
+| Name | Role |
 |---|---|
-| **server** | 有料API（天気データなど）。未払いなら「402：お金を払って」と返す |
-| **facilitator** | 支払いが正しいか検証し、ブロックチェーンに記録（決済）する係 |
-| **client** | 402を受けたら署名して支払い、もう一度APIを呼ぶ（ローカル確認用） |
-| **mcp** | AIエージェントから自然言語で支払いを実行するための窓口。ウォレットも管理する |
+| **server** | A paid API for data such as weather; returns `402 Payment Required` when payment is missing |
+| **facilitator** | Verifies payments and records, or settles, them on the blockchain |
+| **client** | Signs and pays after receiving a 402, then calls the API again for local testing |
+| **mcp** | Provides a natural-language interface for AI agent payments and manages the wallet |
 
-> 💡 serverは「商品を売る店」、facilitatorは「決済端末とレジ担当」、clientは「買う人」、mcpは「買い物を代行するAIエージェント」と考えると分かりやすいです。
+> 💡 Think of the server as the store, the facilitator as the payment terminal and cashier, the client as the buyer, and the MCP server as the AI agent shopping on the buyer's behalf.
 
-### 進め方
+### Workshop flow
 
-先にローカルでx402の流れを理解してから、同じものをクラウドに載せ、最後にAIエージェントから使います。
+We will first understand the x402 flow locally, deploy the same system to the cloud, and finally use it through an AI agent.
 
-> 時間配分はあくまで目安です。
+> The time estimates are guidelines only.
 
-| ステップ | やること | 目的 | 時間の目安 |
+| Step | Activity | Goal | Estimated time |
 |---|---|---|---|
-| 1. セットアップ | 依存関係の導入、設定ファイルの作成 | 動かす準備をする | 10分 |
-| 2. ローカルで確認 | 3つのプログラムをPCで動かし、支払いを体験 | x402の仕組みを手元で理解する | 10分 |
-| 3. デプロイ | 3つのプログラムをCloudflare Workersに載せる | 誰でも使える公開サーバーにする | 10分 |
-| 4. 自然言語で決済 | Claude Codeから、MCP経由で支払う | AIエージェントに安全にお金を扱わせる | 4分 |
-| 5. 後片付け | デプロイしたリソースを削除 | 課金や管理の手間を残さない | 1分 |
+| 1. Setup | Install dependencies and create configuration files | Prepare the system to run | 10 minutes |
+| 2. Local validation | Run three programs on your computer and make a payment | Understand the x402 mechanism locally | 10 minutes |
+| 3. Deployment | Deploy three programs to Cloudflare Workers | Create publicly accessible servers | 10 minutes |
+| 4. Natural-language payment | Pay through MCP from Claude Code | Let an AI agent handle money safely | 4 minutes |
+| 5. Cleanup | Delete deployed resources | Avoid leaving ongoing costs or maintenance | 1 minute |
 
-使うブロックチェーンは **Arc**のテストネット（本物のお金は使いません）、ウォレットには**Privy**を使います。**Claude Code**を使って進めますが、MCP（Streamable HTTP）に対応した**Codex**などのAIエージェントでも、同じURLを登録すれば使えます。
+We will use the **Arc Testnet**, so no real money is involved, and use **Privy** for wallets. The instructions use **Claude Code**, but you can register the same URL with another AI agent that supports MCP over Streamable HTTP, such as **Codex**.
 
-## x402とは？（先に読んでおきましょう）
+## What Is x402?
 
-x402は、HTTPに最初から用意されていたものの、ほとんど使われてこなかった**`402 Payment Required`**というステータスコードを使って、**APIのアクセス権をその場で支払う**ためのプロトコルです。会員登録やAPIキーの発行が要らず、人間だけでなく**AIエージェントも自動で**支払えます。
+x402 is a protocol that uses the long-established but rarely used HTTP **`402 Payment Required`** status code to let clients **pay for API access at request time**. It requires no membership registration or API key, and both people and **AI agents can pay automatically**.
 
-支払いの流れは次の通りです。
+The payment flow works as follows:
 
 ```mermaid
 sequenceDiagram
-    participant C as client（買う側）
-    participant S as server（有料API）
-    participant F as facilitator（決済係）
-    participant B as Arc（ブロックチェーン）
+    participant C as client (buyer)
+    participant S as server (paid API)
+    participant F as facilitator (payment processor)
+    participant B as Arc (blockchain)
 
     C->>S: ① GET /weather
-    S-->>C: ② 402 Payment Required（価格・受取先・チェーン）
-    Note over C: ③ 内容を読んで、ウォレットで署名する
-    C->>S: ④ 署名つきで再リクエスト
-    S->>F: ⑤ 署名を検証して（/verify）
+    S-->>C: ② 402 Payment Required (price, recipient, chain)
+    Note over C: ③ Read the requirements and sign with the wallet
+    C->>S: ④ Retry with the signature
+    S->>F: ⑤ Verify the signature (/verify)
     F-->>S: ⑥ OK
-    S->>F: ⑦ 決済して（/settle）
-    F->>B: ⑧ USDCを送金するトランザクション
-    B-->>F: ⑨ 完了
-    F-->>S: ⑩ 決済完了
-    S-->>C: ⑪ 200 OK（天気データ）
+    S->>F: ⑦ Settle the payment (/settle)
+    F->>B: ⑧ Submit the USDC transfer transaction
+    B-->>F: ⑨ Complete
+    F-->>S: ⑩ Settlement complete
+    S-->>C: ⑪ 200 OK (weather data)
 ```
 
-ポイントは3つです。
+There are three important points:
 
-- **serverはブロックチェーンに触れません**。検証と決済はfacilitatorに任せます。
-- **clientは「署名」するだけ**です。署名で「この金額までなら払ってよい」と認可します。
-- 価格や条件は**402のレスポンスに書いてある**ので、事前の契約や登録なしに、その場で支払い方法が分かります。
+- **The server never interacts with the blockchain.** It delegates verification and settlement to the facilitator.
+- **The client only signs.** The signature authorizes payment up to the specified amount.
+- The **402 response contains the price and terms**, so the client learns how to pay at request time without a prior contract or registration.
 
-このワークショップでは、この流れを**ローカルで体験 → クラウドに載せる → AIエージェントに任せる**の順に確認します。
+In this workshop, you will examine this flow in order: **experience it locally -> deploy it to the cloud -> delegate it to an AI agent**.
 
-## このワークショップで得られること
+## What You Will Learn
 
-このワークショップの内容を最後まで実践することであなたは以下のことを理解することができます。
+By completing this workshop, you will understand:
 
-- x402スキーム
-- Cloudflare Workersにx402スキームに必要なリソースをデプロイする方法
-- 任意のチェーン・アセットを設定する方法
-  - 今回のワークショップではArcテストネットのUSDCを使いますが、他のチェーンやアセットを設定する方法もコードを見れば理解できるようになっています。
-- 自然言語でx402決済を実現させる方法
+- The x402 scheme
+- How to deploy the resources required for x402 to Cloudflare Workers
+- How to configure an arbitrary chain and asset
+  - This workshop uses USDC on Arc Testnet, but the code also shows how to configure other chains and assets.
+- How to make x402 payments through natural language
 
-## 前提条件
+## Prerequisites
 
-- VS Codeなどエディターをインストール済みであること
-- Claude CodeのProプラン以上を契約していること
-- Git がインストール済みであること
-- GitHubアカウントが作成済みであること
-- Privyのアカウントを作成済みで、Appを作成し**Emailログインを有効**にしていること
-- Cloudflareのアカウントを作成済みであること（無料のWorkers Freeプランで可）
-- Node.js **v22以上**およびpnpmをインストール済みであること（Workersのデプロイに使うwranglerがNode 22以上を要求します）
-- MetaMaskをインストール済みであること（テスト用のウォレットと秘密鍵の取得に使います）
-- （講師向け）会場のWi-Fi配下で多くの参加者が同じMCPサーバーを使う場合は、事前にレート制限を調整してください。詳細は「デプロイする」の③mcpの補足を参照
+- An editor such as VS Code is installed
+- A Claude Code Pro plan or higher
+- Git is installed
+- A GitHub account
+- A Privy account and app with **Email login enabled**
+- A Cloudflare account; the free Workers plan is sufficient
+- Node.js **v22 or later** and pnpm; Wrangler, used for Workers deployment, requires Node 22 or later
+- MetaMask, used to create test wallets and obtain private keys
+- For instructors: if many participants on the same venue Wi-Fi will use the same MCP server, adjust the rate limit in advance. See the note for MCP in step 3 of the deployment section.
 
-> wrangler CLIのグローバルインストールは不要です。このリポジトリの依存関係として導入され、`pnpm --filter <パッケージ名> exec wrangler`で実行します。
+> You do not need to install the Wrangler CLI globally. It is included as a repository dependency and run with `pnpm --filter <package-name> exec wrangler`.
 
-## セットアップ
+## Setup
 
-### 依存関係のインストール
+### Install dependencies
 
-このワークショップのコードは、複数のパッケージ（client / server / facilitator / mcp / config）をまとめたpnpmワークスペースです。まず、全パッケージの依存ライブラリを一括でインストールします。プロジェクトのルートで以下を実行してください。
+This workshop is a pnpm workspace containing multiple packages: client, server, facilitator, MCP, and config. Install all package dependencies together from the project root:
 
 ```bash
 pnpm install
 ```
 
-### 環境変数の設定
+### Configure environment variables
 
-秘密鍵やURLなどの設定は、コードにベタ書きせず**環境変数用のファイル（`.env`など）**に分けて置きます。まず、各パッケージ用のテンプレート（`*.example`）を複製して、自分用のファイルを作ります。
+Private keys, URLs, and other settings belong in environment-variable files such as `.env`, not directly in the source code. First, copy each package's `*.example` template to create your own files:
 
 ```bash
 pnpm run setup
 ```
 
-このコマンドにより、以下の8つの環境変数用のファイルが作成されます。
+This command creates the following eight environment-variable files:
 
 ```bash
 pkgs/client/.env
@@ -130,213 +130,213 @@ pkgs/mcp/.dev.vars
 pkgs/config/.env
 ```
 
-### 設定がうまく適用されているかどうかチェックする
+### Verify the configuration
 
-ここまでの準備が正しいか、次に進む前に確認します。全パッケージの型チェックが通れば、依存関係とセットアップは問題ありません。
+Before continuing, confirm that the setup is correct. If type checking succeeds for every package, the dependencies and initial configuration are ready:
 
 ```bash
 pnpm -r run cf:typecheck
 ```
 
-エラーなく全てのパッケージが完了すれば準備OKです！
+If every package finishes without errors, setup is complete.
 
-> 💡 初回クローン直後に`pnpm run -r build`は使わないでください。server / mcpのビルドが、`wrangler types`で生成するファイルを必要とするため失敗します。`cf:typecheck`は生成から型チェックまでをまとめて行います。
+> 💡 Do not run `pnpm run -r build` immediately after the first clone. The server and MCP builds depend on files generated by `wrangler types`, so they will fail. `cf:typecheck` runs generation and type checking together.
 
-## ローカルでの確認手順
+## Local Validation
 
-**この章のゴール：自分のPCでx402の支払いの流れ（402 → 署名 → 決済）を体験すること**です。
+**The goal of this section is to experience the complete x402 payment flow on your computer: 402 -> signature -> settlement.**
 
-いきなりクラウドに載せると、うまくいかないときに原因が分かりにくくなります。そこで、まずはローカルで3つの要素（**client / server / facilitator**）を動かして、流れを理解します。
+When a system is deployed to the cloud immediately, failures can be difficult to diagnose. We will first run the three local components—**client, server, and facilitator**—to understand the flow.
 
-| 要素 | 役割 | ポート |
+| Component | Role | Port |
 |---|---|---|
-| facilitator | 支払いの検証（verify）とオンチェーンでの決済（settle）を行う | 4022 |
-| server | 有料API（`/weather` など）を提供し、未払いなら402を返す | 4021 |
-| client | 402を受け取ると署名して支払い、リトライする | - |
+| facilitator | Verifies payments and performs on-chain settlement | 4022 |
+| server | Provides paid APIs such as `/weather` and returns 402 when unpaid | 4021 |
+| client | Signs, pays, and retries after receiving a 402 | - |
 
-### 1. 環境変数に値を入れる
+### 1. Enter environment-variable values
 
-このあと実際にブロックチェーン上で送金するため、**支払う人・決済を実行する人・受け取る人**のアドレスが必要です。`pnpm run setup` で作成された`.env`に、以下の値を入れてください。
+Because the next steps transfer funds on-chain, you need addresses for the **payer, settlement submitter, and recipient**. Add the following values to the `.env` files created by `pnpm run setup`:
 
-| ファイル | 変数 | 内容 |
+| File | Variable | Value |
 |---|---|---|
-| `pkgs/config/.env` | `PAYEE_ADDRESS` | 支払いの受取先アドレス（あなたのウォレットアドレス） |
-| `pkgs/facilitator/.env` | `EVM_PRIVATE_KEY` | 決済トランザクションを送るウォレットの秘密鍵（ガス代を払う） |
-| `pkgs/client/.env` | `EVM_PRIVATE_KEY` | 支払い側のウォレットの秘密鍵 |
+| `pkgs/config/.env` | `PAYEE_ADDRESS` | Payment recipient address—your wallet address |
+| `pkgs/facilitator/.env` | `EVM_PRIVATE_KEY` | Private key for the wallet that submits settlement transactions and pays gas |
+| `pkgs/client/.env` | `EVM_PRIVATE_KEY` | Private key for the wallet that pays |
 
-秘密鍵は**MetaMask**からコピーして使います。
+Copy the private keys from **MetaMask**:
 
-1. MetaMaskで、このワークショップ専用の**新しいアカウント**を2つ作成します（例：`x402-client`と`x402-facilitator`）
-2. 各アカウントで **︙（アカウントの詳細）→ 秘密鍵を表示** を開き、パスワードを入力して秘密鍵をコピーします
-3. clientのアカウントの秘密鍵を`pkgs/client/.env`、facilitatorのアカウントの秘密鍵を`pkgs/facilitator/.env`の`EVM_PRIVATE_KEY`に貼り付けます（`0x`から始まる形式にしてください）
-4. `PAYEE_ADDRESS`には、受取用のアドレスを設定します。**clientとは別のアドレス**にしてください（同じだと自分宛ての送金になり、残高の変化で決済を確認できません）。MetaMaskにもう1つアカウントを作って、そのアドレスを使うと分かりやすいです
+1. Create two **new accounts dedicated to this workshop** in MetaMask, for example `x402-client` and `x402-facilitator`.
+2. For each account, open **︙ (Account details) -> Show private key**, enter your password, and copy the private key.
+3. Put the client account's private key in `pkgs/client/.env` and the facilitator account's private key in `pkgs/facilitator/.env` as `EVM_PRIVATE_KEY`. Use the format beginning with `0x`.
+4. Set `PAYEE_ADDRESS` to a recipient address **different from the client address**. If they are the same, the wallet sends funds to itself and the balance does not clearly demonstrate settlement. Creating one more MetaMask account for the recipient is the easiest option.
 
-> ⚠️ 秘密鍵は**テスト専用のウォレット**のものを使ってください。メインのウォレットの秘密鍵は絶対に入れないでください。`.env`はGit管理外ですが、チャットなどにも貼らないでください。
+> ⚠️ Use private keys from **test-only wallets**. Never enter the private key for your primary wallet. The `.env` files are excluded from Git, but you must also avoid posting their contents in chat or elsewhere.
 
-チェーンやトークン、価格は`pkgs/config/.env`にまとまっています（デフォルトは**Arc Testnet**のUSDC）。このファイルを書き換えるだけで、他のチェーンやアセットに切り替えられます。
+The chain, token, and pricing are centralized in `pkgs/config/.env`; the defaults use USDC on **Arc Testnet**. Edit this one file to switch to another chain or asset.
 
-### 2. テストネットUSDCを入手する
+### 2. Get testnet USDC
 
-支払いにはUSDCが、決済トランザクションの送信にはガス代が必要です。テストネットのUSDCは無料で受け取れます。
+The payer needs USDC, and the facilitator needs gas to submit the settlement transaction. Testnet USDC is available for free.
 
-[Circle Faucet](https://faucet.circle.com/)で**Arc Testnet**を選び、USDCを受け取ります。
+Open the [Circle Faucet](https://faucet.circle.com/), select **Arc Testnet**, and request USDC for these addresses:
 
-- client（支払い側）のアドレス：最低でも**2 USDC**
-- facilitatorのアドレス：ガス代として少額
+- Client address: at least **2 USDC**
+- Facilitator address: a small amount for gas
 
-> ArcではUSDCがガストークンを兼ねているため、別途ガストークンを用意する必要はありません。
+> USDC is also Arc's gas token, so you do not need a separate gas token.
 
-### 3. facilitatorとserverを起動する
+### 3. Start the facilitator and server
 
-serverは支払いの検証をfacilitatorに依頼するため、**facilitator → server**の順に起動します。ターミナルを2つ開いてください。
+The server asks the facilitator to verify payments, so start them in the order **facilitator -> server**. Open two terminals:
 
 ```bash
-# ターミナルA
+# Terminal A
 pnpm facilitator run dev
 ```
 
 ```bash
-# ターミナルB
+# Terminal B
 pnpm x402server run dev
 ```
 
-もしくは、以下のコマンドで2つまとめてバックグラウンドで起動できます（ログは`.run/`に出力されます）。
+Alternatively, start both in the background with one command. Logs are written to `.run/`:
 
 ```bash
 pnpm start
 ```
 
-止めるときは`pnpm stop`です。
+Run `pnpm stop` when you want to stop them.
 
-## 動作確認（ローカル）
+## Test the Local Deployment
 
-### 1. 起動確認
+### 1. Confirm the services are running
 
 ```bash
 curl localhost:4022/supported
 curl localhost:4021/health
 ```
 
-`/supported`で、facilitatorが対応している決済方式（`exact`と`upto`）とネットワーク（`eip155:5042002`）が返ってくればOKです。
+The `/supported` response should list the facilitator's supported payment schemes, `exact` and `upto`, and the network `eip155:5042002`.
 
-### 2. 支払い前の状態（HTTP 402）を確認する
+### 2. Confirm the unpaid response (HTTP 402)
 
-まず、お金を払わずに有料APIを呼ぶとどうなるかを見てみます。
+First, call the paid API without paying:
 
 ```bash
 curl -i localhost:4021/weather
 ```
 
-`HTTP/1.1 402 Payment Required`が返り、`PAYMENT-REQUIRED`ヘッダーに**価格・受取先・チェーン**などの支払い要件がBase64で入っています。clientはこの内容を読んで、その場で支払い方法を知ります。
+The response should be `HTTP/1.1 402 Payment Required`. The `PAYMENT-REQUIRED` header contains Base64-encoded payment requirements such as the **price, recipient, and chain**. The client reads these values to learn how to pay.
 
-### 3. clientで支払ってデータを取得する
+### 3. Pay and retrieve data with the client
 
 ```bash
 pnpm x402client run dev
 ```
 
-clientを使うと、さきほどの流れ図の③〜⑪を自動で行います（402を受け取る → 署名 → 支払い付きでリトライ → データ取得）。天気データと`Payment settled`（`success: true`とトランザクションハッシュ）が表示されれば成功です🎉
+The client automatically performs steps ③ through ⑪ from the earlier diagram: receive the 402, sign, retry with payment, and retrieve the data. If you see weather data and `Payment settled` with `success: true` and a transaction hash, the payment succeeded. 🎉
 
-トランザクションは[Arc Testnet Explorer](https://explorer.testnet.arc.io/)で確認できます。
+You can inspect the transaction in the [Arc Testnet Explorer](https://explorer.testnet.arc.io/).
 
-### 4. 使った分だけ払う`upto`スキームを試す
+### 4. Try usage-based payments with the `upto` scheme
 
-ここまでの`/weather`は、毎回決まった金額を払う**`exact`（固定料金）**でした。`/usage?units=N`は、使ったユニット数に応じた金額だけを決済する**`upto`（従量課金）**のAPIです。clientは「最大でいくらまで」を署名で認可し、serverが実際の利用量分だけを決済します。
+The `/weather` route uses **`exact` fixed pricing**, which charges the same amount every time. The `/usage?units=N` route uses the **`upto` usage-based scheme**, settling only the amount for the number of units consumed. The client signs an authorization for a maximum amount, and the server settles only the actual usage.
 
-AIエージェントに支払いを任せるときは、**使いすぎを防ぐ仕組み**が欠かせません。ここでその仕組みを確認します。
+When AI agents can make payments, safeguards against **overspending** are essential. This step demonstrates those safeguards.
 
-まず、clientの支払い予算（USDCのPermit2へのallowance）を設定します。`--execute`を付けないと現在の値を確認するだけのdry-runになります。
+First, set the client's payment budget, which is the USDC allowance granted to Permit2. Without `--execute`, the command is a dry run that only displays the current value:
 
 ```bash
 pnpm x402client run approve 2000000 --execute
 ```
 
-次に、ガードレールのシナリオを実行します（facilitatorとserverが起動している必要があります）。
+Next, run the guardrail scenarios. The facilitator and server must still be running:
 
 ```bash
 pnpm x402client run guardrails
 ```
 
-以下の3つのケースが`PASS`になれば成功です。
+The test succeeds when all three cases report `PASS`:
 
-- 署名した上限の範囲内（0.3 USDC）は決済される
-- 署名した上限（0.5 USDC）を超える決済（1.0 USDC）は拒否される
-- clientの上限（`MAX_AMOUNT_PER_PAYMENT`）を超える場合は、署名する前に拒否される
+- A payment within the signed cap, 0.3 USDC, is settled.
+- A 1.0 USDC payment above the 0.5 USDC signed cap is rejected.
+- A request above the client's `MAX_AMOUNT_PER_PAYMENT` limit is rejected before signing.
 
-AIエージェントにお金を扱わせる場合に重要な「支払いの上限を何重にもかける」考え方を、ここで体験できます。
+This demonstrates how multiple payment limits work together when an AI agent handles money.
 
-ローカルでの検証はここまです！
+Local validation is now complete.
 
-次からはこのリソースを Cloudflare Workersにデプロイしてリモート環境でも動くことを確認していきます。
+Next, we will deploy the resources to Cloudflare Workers and verify that they work remotely.
 
-## Cloudflare Workersにデプロイ
+## Deploy to Cloudflare Workers
 
-> ここからはCloudflareのアカウントが必要になります。無料で作成できるので未作成の方は作成をお願いします。
+> You need a Cloudflare account for the following steps. You can create one for free if you do not already have one.
 
-**この章のゴール：ローカルで動かした3つの要素と、AIエージェント用のMCPサーバーを、Cloudflare Workersに公開すること**です。
+**The goal of this section is to publish the three locally tested components and the AI agent's MCP server on Cloudflare Workers.**
 
-クラウドに載せることで、PCを閉じていても動き、AIエージェントのMCPクライアントからも接続できる状態になります。
+Once deployed, the services remain available when your computer is off and can be reached by an AI agent's MCP client.
 
-### 1. Cloudflareにログインする
+### 1. Sign in to Cloudflare
 
 ```bash
 pnpm --filter facilitator exec wrangler login
 pnpm --filter facilitator exec wrangler whoami
 ```
 
-`wrangler login`でブラウザが開くので、Cloudflareにログインして許可します。`whoami`で、デプロイ先のアカウントが正しいか確認してください。また、[Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)で`workers.dev`のサブドメインが未設定の場合は先に設定しておきます。
+`wrangler login` opens a browser so you can sign in and authorize Cloudflare. Use `whoami` to confirm the destination account. If you have not configured a `workers.dev` subdomain, set one up first in [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages).
 
-### 2. Privyの設定をする
+### 2. Configure Privy
 
-MCPサーバーは、メールログインで**AIエージェント専用のウォレット**を作ります。ウォレットの管理にはPrivyを使うため、先にPrivyの設定を済ませます。[Privy Dashboard](https://dashboard.privy.io)で以下を行います。
+The MCP server uses email login to create a **wallet dedicated to the AI agent**. Complete the following steps in the [Privy Dashboard](https://dashboard.privy.io):
 
-1. **Email**ログインを有効にする
-2. **App ID**・**App Secret**・**Client ID**を控える
-   - `PRIVY_APP_ID`と`PRIVY_CLIENT_ID`は公開してよい値なので`pkgs/mcp/wrangler.jsonc`の`vars`に、`PRIVY_APP_SECRET`は次の手順でsecretに設定します
-3. **Allowed origins**に、デプロイ後のmcp Workerのオリジン（例：`https://x402-arc-mcp.<あなたのサブドメイン>.workers.dev`）を追加する
-   - mcp WorkerのURLは、デプロイ前でも「Worker名（`x402-arc-mcp`）＋あなたの`workers.dev`サブドメイン」で決まります
-   - サブドメインは、[Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)のダッシュボードで確認できます。`pnpm --filter facilitator exec wrangler whoami`でもアカウントの情報を確認できます
-   - ローカルで試す場合は`http://localhost:5173`も追加しておきます
-   - 登録が必要な理由：Privyは、登録されたオリジン（呼び出し元のURL）以外からのログインを拒否します。登録を忘れると`Origin not allowed`エラーになります
+1. Enable **Email** login.
+2. Record the **App ID**, **App Secret**, and **Client ID**.
+   - `PRIVY_APP_ID` and `PRIVY_CLIENT_ID` are public values and belong in `vars` in `pkgs/mcp/wrangler.jsonc`. Add `PRIVY_APP_SECRET` as a secret in the next step.
+3. Add the deployed MCP Worker's origin to **Allowed origins**, for example `https://x402-arc-mcp.<your-subdomain>.workers.dev`.
+   - You can determine the MCP Worker URL before deployment from the Worker name, `x402-arc-mcp`, and your `workers.dev` subdomain.
+   - Find the subdomain in the [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages) dashboard. You can also inspect the account with `pnpm --filter facilitator exec wrangler whoami`.
+   - Add `http://localhost:5173` as well if you will test locally.
+   - Privy rejects login requests from origins not registered in the dashboard. If you skip this step, login fails with `Origin not allowed`.
 
-### 3. シークレットを登録する
+### 3. Register secrets
 
-秘密鍵などの秘密情報は、`wrangler.jsonc`のようなファイルに書くと公開される恐れがあります。そこで、ファイルではなく**Cloudflareの暗号化された保管庫（wranglerのsecret）**に登録します。コマンド実行後に値の入力を求められるので、ご自身で入力してください。
+Storing private keys and similar values in files such as `wrangler.jsonc` risks exposing them. Store them in Cloudflare's encrypted secret storage instead. Each command prompts you to enter the value directly:
 
 ```bash
 pnpm --filter facilitator exec wrangler secret put EVM_PRIVATE_KEY
 pnpm --filter x402mcp exec wrangler secret put PRIVY_APP_SECRET
 ```
 
-> ⚠️ `PRIVY_APP_SECRET`はそのアプリの全ユーザーのウォレットを作成できる強い権限を持ちます。他人に渡したり、Gitにコミットしたりしないでください。
+> ⚠️ `PRIVY_APP_SECRET` has powerful permissions that can create wallets for every user in the app. Never share it or commit it to Git.
 
-初回の`wrangler secret put`では、まだWorkerが存在しないため作成するか聞かれることがあります。その場合は`Y`で進めてください。
+The first `wrangler secret put` may ask whether to create the Worker because it does not exist yet. Enter `Y` to continue.
 
-### 4. デプロイする（順番が大事です）
+### 4. Deploy in the required order
 
-serverはfacilitatorのURLを、mcpはserverのURLを設定に持ちます。URLはデプロイしてはじめて分かるため、**facilitator → server → mcp**の順にデプロイします。
+The server configuration needs the facilitator URL, and the MCP configuration needs the server URL. Because these URLs become available only after deployment, deploy in the order **facilitator -> server -> MCP**.
 
-> ⚠️ `pkgs/server/wrangler.jsonc`と`pkgs/mcp/wrangler.jsonc`の`<...>`の部分は、**すべてご自身の値に書き換えてください**。`<...>`が残ったままでもデプロイ自体は通りますが、Workerが正しく動きません。デプロイ前に、次のコマンドで`<`が残っていないか確認できます（何も表示されなければOKです）。
+> ⚠️ Replace **every `<...>` placeholder with your own value** in `pkgs/server/wrangler.jsonc` and `pkgs/mcp/wrangler.jsonc`. Deployment can succeed while placeholders remain, but the Workers will not operate correctly. Before deploying, run the following check. No output means no placeholders remain:
 >
 > ```bash
 > grep -n "<" pkgs/server/wrangler.jsonc pkgs/mcp/wrangler.jsonc | grep -v '\$schema'
 > ```
 
-**① facilitator**
+**① Facilitator**
 
 ```bash
 pnpm deploy:facilitator
 ```
 
-出力された`https://x402-arc-facilitator.<サブドメイン>.workers.dev`のURLを控えます。
+Record the generated URL, which looks like `https://x402-arc-facilitator.<subdomain>.workers.dev`.
 
-**② server**
+**② Server**
 
-`pkgs/server/wrangler.jsonc`の`FACILITATOR_URL`を、①のURLに書き換えてからデプロイします。
+Set `FACILITATOR_URL` in `pkgs/server/wrangler.jsonc` to the URL from step ①, then deploy:
 
 ```jsonc
 "vars": {
-  "FACILITATOR_URL": "https://x402-arc-facilitator.<サブドメイン>.workers.dev"
+  "FACILITATOR_URL": "https://x402-arc-facilitator.<subdomain>.workers.dev"
 }
 ```
 
@@ -344,16 +344,16 @@ pnpm deploy:facilitator
 pnpm deploy:server
 ```
 
-**③ mcp**
+**③ MCP**
 
-`pkgs/mcp/wrangler.jsonc`の以下の値を書き換えてからデプロイします。
+Update the following values in `pkgs/mcp/wrangler.jsonc`, then deploy:
 
 ```jsonc
 "vars": {
-  "PAYWALL_API_BASE_URL": "https://x402-arc-server.<サブドメイン>.workers.dev", // ②のURL
-  "PRIVY_APP_ID": "<あなたのApp ID>",
-  "PRIVY_CLIENT_ID": "<あなたのClient ID>",
-  "PRIVY_ORIGIN": "https://x402-arc-mcp.<サブドメイン>.workers.dev" // このmcp WorkerのURL
+  "PAYWALL_API_BASE_URL": "https://x402-arc-server.<subdomain>.workers.dev", // URL from step ②
+  "PRIVY_APP_ID": "<your App ID>",
+  "PRIVY_CLIENT_ID": "<your Client ID>",
+  "PRIVY_ORIGIN": "https://x402-arc-mcp.<subdomain>.workers.dev" // This MCP Worker's URL
 }
 ```
 
@@ -361,29 +361,29 @@ pnpm deploy:server
 pnpm deploy:mcp
 ```
 
-> 💡 **レート制限（講師向け）**：`pkgs/mcp/wrangler.jsonc`の`ratelimits`は、既定で「同一クライアントIPあたり300リクエスト/60秒」です。会場のWi-Fi配下では参加者全員が同じIPに見えるため、1つの枠を共有して誤って429になることがあります。1人あたり約10〜15リクエスト使う想定で、`simple.limit`を「参加者数 × 15」以上に引き上げてください（例：50人なら750以上。`period`は10か60のみ）。また`namespace_id`（既定`"4021"`）はCloudflareアカウント内で一意にしてください。
+> 💡 **Rate limits for instructors:** The `ratelimits` setting in `pkgs/mcp/wrangler.jsonc` defaults to 300 requests per 60 seconds for each client IP. On venue Wi-Fi, every participant may appear to use the same IP and share one quota, leading to accidental 429 responses. Plan for about 10–15 requests per person and raise `simple.limit` to at least the number of participants x 15—for example, 750 or more for 50 people. `period` can only be 10 or 60. Also ensure that `namespace_id`, which defaults to `"4021"`, is unique within the Cloudflare account.
 
-> 💡 必ず`pnpm deploy:*`を使ってください。`wrangler deploy`を直接実行すると、`pkgs/config/.env`の共有設定（チェーン・トークン・価格など）がWorkerに渡らず、Workerが500エラーを返します。
+> 💡 Always use `pnpm deploy:*`. Running `wrangler deploy` directly does not pass the shared chain, token, and pricing configuration from `pkgs/config/.env` to the Worker, which will then return a 500 error.
 
-## 動作確認（デプロイ後）
+## Test the Deployed Services
 
-### 1. facilitatorとserverの確認
-
-```bash
-curl -s https://<facilitatorのURL>/supported
-curl -s https://<serverのURL>/health
-curl -s -i https://<serverのURL>/weather
-```
-
-ローカルのときと同じように、`/supported`が返り、`/weather`が`402`になればデプロイ成功です。
-
-### 2. MCPサーバーをClaude Codeに登録する
+### 1. Check the facilitator and server
 
 ```bash
-claude mcp add --transport http x402-arc-remote https://<mcpのURL>/mcp
+curl -s https://<facilitator-URL>/supported
+curl -s https://<server-URL>/health
+curl -s -i https://<server-URL>/weather
 ```
 
-もしくは、 `.claude/.mcp.json`を作成してMCPサーバーを登録してください。
+As with the local services, deployment succeeded if `/supported` returns data and `/weather` returns `402`.
+
+### 2. Register the MCP server with Claude Code
+
+```bash
+claude mcp add --transport http x402-arc-remote https://<mcp-URL>/mcp
+```
+
+Alternatively, create `.claude/.mcp.json` and register the MCP server there:
 
 ```json
 {
@@ -396,81 +396,83 @@ claude mcp add --transport http x402-arc-remote https://<mcpのURL>/mcp
 }
 ```
 
-そのあと、以下のコマンドで Claude Codeを起動してください。
+Then start Claude Code with this command:
 
 ```bash
 claude --mcp-config=./.claude/.mcp.json
 ```
 
-登録後、Claude Codeで`/mcp`を実行して接続状態を確認してください。
+After registration, run `/mcp` in Claude Code to confirm the connection.
 
-### 3. 自然言語でx402決済を実行する
+### 3. Make x402 payments with natural language
 
-MCPサーバーを登録すると、Claude Codeは次のツールを使えるようになります。ウォレットの作成から支払いまで、すべて自然言語の指示だけで進められます。
+After registering the MCP server, Claude Code can use the following tools. You can create a wallet and make payments entirely through natural-language instructions:
 
-| ツール | 内容 |
+| Tool | Description |
 |---|---|
-| `wallet_status` | ウォレットの有無・残高・allowanceの確認 |
-| `wallet_login_start` / `wallet_login_verify` | メールのワンタイムコードでログインし、Privyのウォレットを作成 |
-| `set_budget` | 支払い予算（allowance）の設定。**金額の確認（confirm）を挟む2ステップ** |
-| `pay_and_fetch` | 有料APIにアクセスして支払う（`/weather`と`/usage?units=N`のみ許可） |
+| `wallet_status` | Checks whether a wallet exists, plus its balance and allowance |
+| `wallet_login_start` / `wallet_login_verify` | Signs in with a one-time email code and creates a Privy wallet |
+| `set_budget` | Sets the payment allowance using a **two-step flow with amount confirmation** |
+| `pay_and_fetch` | Accesses and pays for a paid API; only `/weather` and `/usage?units=N` are allowed |
 
-Claude Codeに、以下のように話しかけてみましょう。
+Try giving Claude Code the following prompt:
 
-> ウォレットの状態を確認して。まだ無ければ、メールでログインしてウォレットを作るところまで案内して。
+> Check my wallet status. If I do not have a wallet yet, guide me through signing in by email and creating one.
 
-ウォレットが作られたら、表示されたアドレスに[Circle Faucet](https://faucet.circle.com/)で**Arc Testnet**のUSDCを入金し、続けて以下を依頼します。
+After the wallet is created, use the [Circle Faucet](https://faucet.circle.com/) to fund the displayed address with USDC on **Arc Testnet**, then ask:
 
-> 予算を2 USDCに設定して（金額は私に確認してから実行して）。そのあと以下を順番にやって、それぞれ結果を教えて。
-> 1. `/weather`を支払って取得（exact、0.5 USDC）
-> 2. `/usage?units=3`を支払って取得（upto、0.3 USDC）
-> 3. `/usage?units=10`を支払って取得（uptoで1.0 USDC。署名した上限0.5 USDCを超えるのでどうなる？）
+> Set my budget to 2 USDC. Confirm the amount with me before executing. Then perform each of the following in order and report the result:
+> 1. Pay for and fetch `/weather` (exact, 0.5 USDC).
+> 2. Pay for and fetch `/usage?units=3` (upto, 0.3 USDC).
+> 3. Pay for and fetch `/usage?units=10` (upto, 1.0 USDC). What happens when it exceeds the signed cap of 0.5 USDC?
 
-期待される結果は以下の通りです。
+Expected results:
 
-- 1と2：決済が成功する
-- 3：facilitatorが`invalid_upto_evm_payload_settlement_exceeds_amount`で拒否し、**課金されない**
+- Steps 1 and 2: settlement succeeds.
+- Step 3: the facilitator rejects the request with `invalid_upto_evm_payload_settlement_exceeds_amount`, and **no funds are charged**.
 
-> 💡 3の拒否は、失敗ではなく**ガードレールが正しく働いた結果**です。ローカルで体験した「上限を超える決済は通らない」仕組みが、AIエージェント経由でも効いていることを確認できます。
+> 💡 The rejection in step 3 is not a failure; it proves that the **guardrail works correctly**. The same mechanism that blocked over-cap settlement locally also protects payments made through the AI agent.
 
-> 💡 予算の承認（`set_budget`）だけは人間が確認する設計です。AIエージェントが自分で支払い上限を引き上げることはできません。一度予算を承認すれば、あとは上限の範囲内でエージェントが自律的に支払えます。これが「AIエージェントに安全にお金を扱わせる」ための仕組みです。
+> 💡 Budget approval with `set_budget` always requires human confirmation. The AI agent cannot raise its own payment limit. After the budget is approved once, the agent can pay autonomously within that limit. This is how the system lets an AI agent handle money safely.
 
-### うまくいかないとき
+### Troubleshooting
 
-| 症状 | 確認すること |
+| Symptom | What to check |
 |---|---|
-| `wallet_login_start`が`Origin not allowed`で失敗 | Privy Dashboardの**Allowed origins**にmcp WorkerのURLを登録したか |
-| `wallet_login_start`が`Must specify origin`で失敗 | `PRIVY_ORIGIN`を設定してmcpを再デプロイしたか |
-| Workerが変数名つきの500エラーを返す | `wrangler deploy`を直接実行していないか（`pnpm deploy:*`を使う） |
-| serverからfacilitatorへのリクエストが失敗する（Cloudflareエラー1042） | `wrangler.jsonc`の`compatibility_flags`に`global_fetch_strictly_public`があるか |
-| `wallet_status`で`rate limit exceeded` | ArcのパブリックRPCの制限です。数秒待って再実行してください |
-| `invalid_exact_evm_insufficient_balance` | 支払い側ウォレットのUSDC残高が不足しています。Faucetで補充してください |
+| `wallet_login_start` fails with `Origin not allowed` | Is the MCP Worker URL registered in **Allowed origins** in the Privy Dashboard? |
+| `wallet_login_start` fails with `Must specify origin` | Did you set `PRIVY_ORIGIN` and redeploy the MCP Worker? |
+| A Worker returns a 500 error naming a variable | Did you run `wrangler deploy` directly? Use `pnpm deploy:*` instead. |
+| The server's request to the facilitator fails with Cloudflare error 1042 | Does `wrangler.jsonc` include `global_fetch_strictly_public` in `compatibility_flags`? |
+| `wallet_status` returns `rate limit exceeded` | The Arc public RPC is rate-limiting the request. Wait a few seconds and try again. |
+| `invalid_exact_evm_insufficient_balance` | The payer wallet does not have enough USDC. Refill it from the faucet. |
 
-ログは以下で確認できます。
+View logs with:
 
 ```bash
-pnpm --filter <パッケージ名> exec wrangler tail
+pnpm --filter <package-name> exec wrangler tail
 ```
 
-## 後片付け
+## Cleanup
 
-検証が終わったら、課金や管理の手間を残さないよう、以下を行ってください。
+After validation, complete the following steps so no resources or maintenance work remain.
 
-### 1. ローカルのサーバーを止める
+### 1. Stop the local servers
 
-`pnpm start`で起動した場合は、次のコマンドで止めます。ターミナルで直接起動した場合は`Ctrl+C`で止めてください。
+If you started the services with `pnpm start`, stop them with:
 
 ```bash
 pnpm stop
 ```
 
-### 2. Claude CodeからMCPサーバーの登録を外す
+If you started them directly in terminal windows, press `Ctrl+C` in each terminal.
+
+### 2. Remove the MCP server from Claude Code
 
 ```bash
 claude mcp remove x402-arc-remote
 ```
 
-### 3. デプロイしたWorkerを削除する
+### 3. Delete the deployed Workers
 
 ```bash
 pnpm --filter facilitator exec wrangler delete
@@ -478,37 +480,35 @@ pnpm --filter x402server exec wrangler delete
 pnpm --filter x402mcp exec wrangler delete
 ```
 
-それぞれ確認のプロンプトが表示されるので、内容を確認して進めてください。正常に完了すれば、Workerとそこに登録したsecretが**Cloudflare Workers**から削除されます。
+Review and accept the confirmation prompt for each command. When deletion completes, the Workers and their registered secrets are removed from **Cloudflare Workers**.
 
-### 4. 秘密情報と残りの資金を整理する
+### 4. Clean up secrets and remaining funds
 
-- `pkgs/*/.env`に貼ったテスト用の秘密鍵は、不要になったら削除してください。MetaMaskの専用アカウントも、使い終わったら使わないようにしてください
-- Privy Dashboardで登録した**Allowed origins**から、このワークショップ用のURLを削除してください
-- 他の用途にも使っているPrivyのAppを使った場合は、**App Secretを再発行（ローテーション）**しておくと安心です
-- テストネットのUSDCは価値がないため、そのままで構いません
+- Delete test private keys from `pkgs/*/.env` when you no longer need them. Stop using the dedicated MetaMask accounts after the workshop.
+- Remove the workshop URL from **Allowed origins** in the Privy Dashboard.
+- If you used a Privy app that serves other purposes, rotate its **App Secret** as a precaution.
+- Testnet USDC has no value, so it can remain in the test wallets.
 
-## まとめ
+## Summary
 
-以上でワークショップは終わりです！
+You have completed the workshop. Congratulations! 🥳
 
-おめでとうございます🥳！！
+You learned how to deploy and run the minimal source code required for an x402 scheme on Cloudflare Workers.
 
-これでx402スキームを実現するための最小限のソースコードをCloudflare Workersにデプロイして動かす方法を学びました。
+Use this code as a foundation for your own original application.
 
-次はこのコードをベースにあなただけのオリジナルなアプリの開発に繋げてください！！
-
-このワークショップを受講していただき本当にありがとうございました！！
+Thank you very much for participating in this workshop!
 
 Haruki
 
-## 参考リンク
+## References
 
-- [このワークショップのリポジトリ](https://github.com/mashharuki/Arc-x402-sample)
-- [x402 公式サイト](https://www.x402.org/)
-- [x402 ドキュメント](https://docs.x402.org/)
-- [Arc（Circle）](https://docs.arc.io/arc-chain)
+- [Workshop repository](https://github.com/mashharuki/Arc-x402-sample)
+- [Official x402 website](https://www.x402.org/)
+- [x402 documentation](https://docs.x402.org/)
+- [Arc by Circle](https://docs.arc.io/arc-chain)
 - [Circle Faucet](https://faucet.circle.com/)
 - [Arc Testnet Explorer](https://explorer.testnet.arc.io/)
 - [Privy Dashboard](https://dashboard.privy.io)
-- [Cloudflare Workers ドキュメント](https://developers.cloudflare.com/workers/)
-- [Cloudflare Workers デプロイ手順（詳細版）](./cloudflare-deploy.md)
+- [Cloudflare Workers documentation](https://developers.cloudflare.com/workers/)
+- [Detailed Cloudflare Workers deployment guide](./cloudflare-deploy.md)

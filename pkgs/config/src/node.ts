@@ -2,11 +2,11 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
 /**
- * 共有設定ファイル(pkgs/config/.env)を process.env に読み込む(Node専用)
+ * Loads the shared configuration file (pkgs/config/.env) into process.env (Node only).
  *
- * cwdに依存せず、このパッケージ直下の .env を読む。
- * すでに設定されている環境変数(各パッケージの .env やシェルの値)は上書きしない。
- * Workers では使わない。Workers には deploy / dev のスクリプトが同じ値を --var で渡す。
+ * Reads the .env file in this package regardless of the current working directory.
+ * Does not overwrite existing variables from a package-specific .env file or the shell.
+ * Not used by Workers; the deploy/dev scripts pass the same values with --var.
  */
 export const loadSharedEnv = (): void => {
   dotenv.config({

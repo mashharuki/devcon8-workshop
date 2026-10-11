@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# start.sh で起動した facilitator と x402 server をまとめて停止する
+# Stop the facilitator and x402 server started by start.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 
-# pnpm -> tsx -> node と子プロセスが連なるため、子孫から順に終了させる
+# pnpm -> tsx -> node forms a child-process chain, so terminate descendants first
 kill_tree() {
   local pid="$1" child
   for child in $(pgrep -P "$pid" 2>/dev/null || true); do
@@ -18,7 +18,7 @@ for name in x402server facilitator; do
   pid_file="$RUN_DIR/$name.pid"
 
   if [[ ! -f "$pid_file" ]]; then
-    echo "[skip] $name の PID ファイルがありません"
+    echo "[skip] No PID file found for $name"
     continue
   fi
 
@@ -27,7 +27,7 @@ for name in x402server facilitator; do
     kill_tree "$pid"
     echo "[stop] $name (PID $pid)"
   else
-    echo "[skip] $name は既に停止しています"
+    echo "[skip] $name is already stopped"
   fi
   rm "$pid_file"
 done

@@ -7,24 +7,24 @@ import {
 } from "@x402/evm";
 
 /**
- * Privyのポリシー(委任キーが署名できる範囲)を組み立てる。
+ * Builds the Privy policy that defines what the delegated key may sign.
  *
- * ALLOWルールだけで構成する(許可リスト方式)。
- * ethereum_typed_data_message 条件は、ポリシーの types がクライアントの署名リクエストと
- * 完全一致しないと false になる。ALLOWのみなら不一致は「どのルールにも一致しない=拒否」になり、
- * 安全側に倒れる(DENYルールだと素通りするので使わない)。
+ * Uses ALLOW rules only (an allowlist model).
+ * An ethereum_typed_data_message condition is false unless the policy's types exactly match the
+ * client's signing request. With ALLOW-only rules, a mismatch means no rules match and the request
+ * is rejected, which fails safely. A DENY rule would let a mismatch pass through, so none are used.
  */
 export type PolicyInput = {
   chainId: number;
-  /** 決済トークン(USDC)のアドレス */
+  /** Payment token (USDC) address. */
   asset: string;
-  /** 1回の署名で許可する最大額(atomic units) */
+  /** Maximum amount allowed per signature, in atomic units. */
   maxAmount: string;
-  /** 送金先として許可するアドレス */
+  /** Addresses allowed as transfer destinations. */
   payees: string[];
 };
 
-// SDKの型に合わせる(条件の形がSDKと合っているかをコンパイルで検証する)
+// Match the SDK type so the compiler validates the condition structure
 export type PolicyBody = Parameters<
   ReturnType<PrivyClient["policies"]>["create"]
 >[0];
@@ -40,8 +40,8 @@ type DomainField = Extract<
 
 type TypedDataTypes = Record<string, { name: string; type: string }[]>;
 
-/** 
- * x402の型定数はreadonlyなので、ポリシーに渡せる変更可能な形にコピーする
+/**
+ * x402 type constants are readonly, so copy them into a mutable shape accepted by the policy.
  */
 const toMutableTypes = (
   types: Record<string, readonly { name: string; type: string }[]>,
@@ -74,8 +74,8 @@ const messageCondition = (
   value,
 });
 
-/** 
- * uptoスキーム: Permit2(PermitWitnessTransferFrom)の署名
+/**
+ * upto scheme: Permit2 (PermitWitnessTransferFrom) signature.
  */
 const uptoRule = (input: PolicyInput): Rule => {
   const types = toMutableTypes(uptoPermit2WitnessTypes);
@@ -107,8 +107,8 @@ const uptoRule = (input: PolicyInput): Rule => {
   };
 };
 
-/** 
- * exactスキーム: ERC-3009(TransferWithAuthorization)の署名
+/**
+ * exact scheme: ERC-3009 (TransferWithAuthorization) signature.
  */
 const exactRule = (input: PolicyInput): Rule => {
   const types = toMutableTypes(authorizationTypes);
@@ -126,8 +126,8 @@ const exactRule = (input: PolicyInput): Rule => {
   };
 };
 
-/** 
- * 予算の承認(approve)のためのトランザクション署名: 決済トークンへの送信だけを許可
+/**
+ * Transaction signing for budget approval (approve): allows calls only to the payment token.
  */
 const approveRule = (input: PolicyInput): Rule => ({
   name: "Sign transactions to the payment token only",
@@ -156,10 +156,9 @@ const approveRule = (input: PolicyInput): Rule => ({
 });
 
 /**
- * ポリシーを組み立てる。
- * x402のuptoスキームとexactスキームの両方を含む。
- * @param input 
- * @returns 
+ * Builds a policy that includes both the x402 upto and exact schemes.
+ * @param input
+ * @returns
  */
 export const buildPolicy = (input: PolicyInput): PolicyBody => ({
   version: "1.0",

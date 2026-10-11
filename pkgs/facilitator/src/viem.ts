@@ -3,10 +3,10 @@ import { type Chain, createWalletClient, http, publicActions } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 /**
- * 指定したチェーンのFacilitator EVM signerを作成する。
- * @param privateKey Facilitatorが決済トランザクションに署名する秘密鍵
- * @param chain 対象チェーン
- * @param rpcUrl 省略時はチェーン既定のRPC
+ * Creates a Facilitator EVM signer for the specified chain.
+ * @param privateKey Private key used by the facilitator to sign settlement transactions
+ * @param chain Target chain
+ * @param rpcUrl Uses the chain's default RPC when omitted
  */
 export const createEvmSigner = (
   privateKey: `0x${string}`,

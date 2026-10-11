@@ -1,5 +1,5 @@
 export type GuardEnv = {
-  /** カンマ区切りで許可するOrigin。未設定ならOriginヘッダ付きのリクエストは全て拒否する */
+  /** Comma-separated allowed origins. When unset, rejects every request that includes an Origin header. */
   ALLOWED_ORIGINS?: string;
   RATE_LIMITER: {
     limit: (options: { key: string }) => Promise<{ success: boolean }>;
@@ -13,10 +13,10 @@ const parseOrigins = (value: string | undefined): string[] =>
     .filter((item) => item.length > 0);
 
 /**
- * /mcp を公開するための最低限の防御。
- * - Origin: ブラウザ経由(DNS rebinding等)のリクエストを拒否する。MCPクライアント(Claude Code等)はOriginを付けない
- * - レート制限: クライアントIPごとに、OTP送信の乱用を抑える
- * 拒否するなら Response を、通すなら undefined を返す
+ * Minimum safeguards for exposing /mcp.
+ * - Origin: rejects browser-based requests such as DNS rebinding. MCP clients such as Claude Code omit Origin.
+ * - Rate limiting: prevents OTP-send abuse per client IP.
+ * Returns a Response when rejecting a request, or undefined when allowing it.
  */
 export const guardRequest = async (
   request: Request,

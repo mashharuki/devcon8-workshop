@@ -20,10 +20,10 @@
     }
   ],
   "vars": {
-    "PAYWALL_API_BASE_URL": "<serverのURL>",
+    "PAYWALL_API_BASE_URL": "<server URL>",
     "ALLOWED_ORIGINS": "http://localhost:5173",
-    "PRIVY_APP_ID": "<あなたのPrivy App ID>",
-    "PRIVY_CLIENT_ID": "<あなたのPrivy Client ID>",
-    "PRIVY_ORIGIN": "<このmcp WorkerのURL>"
+    "PRIVY_APP_ID": "<your Privy App ID>",
+    "PRIVY_CLIENT_ID": "<your Privy Client ID>",
+    "PRIVY_ORIGIN": "<this MCP Worker's URL>"
   }
 }

@@ -1,16 +1,16 @@
 import { z } from "zod";
 import { fail, ok, type Result, toMessage } from "./result.js";
 
-/** ローカルに保存するウォレット情報。delegateKey は委任キーの秘密鍵なので外に出さない */
+/** Locally stored wallet data. delegateKey is a delegated private key and must never be exposed. */
 export const walletStateSchema = z.object({
   email: z.string(),
   userId: z.string(),
   walletId: z.string(),
   address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
-  // 追加署名者(key quorum)のID
+  // ID of the additional signer (key quorum)
   signerId: z.string(),
   policyId: z.string(),
-  // 委任キーの秘密鍵(base64 PKCS8)。この端末のこのユーザーだけが持つ
+  // Delegated private key (base64 PKCS8), held only by this user on this device
   delegateKey: z.string(),
 });
 
@@ -21,7 +21,7 @@ export type WalletStore = {
   save: (state: WalletState) => Promise<Result<null>>;
 };
 
-/** Durable Objectストレージ等のKey-Valueに保存するストア(Workers用) */
+/** Key-value-backed store for Workers, such as Durable Object storage. */
 export type KeyValueStorage = {
   get: <T>(key: string) => Promise<T | undefined>;
   put: (key: string, value: unknown) => Promise<void>;
@@ -30,7 +30,7 @@ export type KeyValueStorage = {
 const WALLET_KEY = "wallet";
 
 /**
- * KeyValueStorageを用いてWalletStoreを作成する
+ * Creates a WalletStore backed by KeyValueStorage.
  * @param storage
  * @returns
  */

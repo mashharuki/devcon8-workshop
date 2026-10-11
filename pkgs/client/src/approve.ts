@@ -5,19 +5,19 @@ import { loadSharedEnv } from "@x402-sample/config/node";
 import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { signer } from "./viem";
 
-// チェーン・トークンは共有設定(pkgs/config/.env)から読み込む
+// Load the chain and token from the shared configuration (pkgs/config/.env)
 loadSharedEnv();
 
 /**
- * USDCのPermit2へのallowanceを確認・設定するスクリプト(uptoスキームの事前準備)
+ * Script that checks and sets the USDC allowance for Permit2 (prerequisite for the upto scheme).
  *
- * このallowanceが「オンチェーンで強制される総額の上限」になる。
- * 無制限(maxUint256)にせず、予算ぶんだけを承認する。
+ * This allowance becomes the total spending limit enforced on-chain.
+ * Approve only the budgeted amount rather than an unlimited allowance (maxUint256).
  *
- * 使い方:
+ * Usage:
  *   pnpm x402client run approve [amount] [--execute]
- *   - amount: 承認額(atomic units)。省略時は 2000000 (= 2 USDC)。0 を指定すると承認を取り消す
- *   - --execute を付けない場合は現在値の表示のみ(トランザクションは送らない)
+ *   - amount: Amount to approve (atomic units). Defaults to 2000000 (= 2 USDC). Use 0 to revoke approval.
+ *   - Without --execute, only displays the current value (no transaction is sent).
  */
 
 const DEFAULT_ALLOWANCE = "2000000";
@@ -38,12 +38,12 @@ const main = async (): Promise<void> => {
       `amount must be a non-negative integer (atomic units): ${amountArg}`,
     );
   }
-  // チェーンとトークンは .env(CHAIN_NAME / ASSET_ADDRESS)から読み込む
+  // Load the chain and token from .env (CHAIN_NAME / ASSET_ADDRESS)
   const chain = getChain(process.env);
   const token = getTokenAddress(process.env);
   const amount = BigInt(amountArg);
 
-  // サーバー/facilitatorと同じチェーンを使う
+  // Use the same chain as the server and facilitator
   const publicClient = createPublicClient({
     chain,
     transport: http(),
@@ -64,7 +64,7 @@ const main = async (): Promise<void> => {
 
   if (!isExecute) {
     console.log(
-      "dry-run: トランザクションは送っていません。実行するには --execute を付けてください",
+      "dry-run: No transaction was sent. Add --execute to submit it.",
     );
     return;
   }

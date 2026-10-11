@@ -74,7 +74,7 @@ Stale leftovers: none of the old Kaia/JPYC values remain in `.env.example`.
 
 ## Conventions specific to this repo
 
-- Source comments are in Japanese; match that when editing existing files.
+- Source comments, runtime messages, and documentation are written in English.
 - Route error responses use `c.json({ error: error instanceof Error ? error.message : "Unknown error" }, 500)`.
 - `.env.example` files are denied to Serena's read tools; use the general `Read` tool.
 - `.claude/rules/testing.md` describes test conventions, but no tests exist yet, so they are aspirational.

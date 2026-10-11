@@ -2,7 +2,7 @@ import "dotenv/config";
 import { api, httpClient } from "./config";
 
 /**
- * メインスクリプト
+ * Main script
  */
 const main = async () => {
   // Make request - payment is handled automatically

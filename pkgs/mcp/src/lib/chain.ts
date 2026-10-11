@@ -13,14 +13,14 @@ const createChainClient = (chain: Chain) =>
   createPublicClient({ chain, transport: http() });
 
 export type WalletBalances = {
-  /** トークン残高(atomic units) */
+  /** Token balance in atomic units. */
   balance: string;
-  /** Permit2へのallowance = uptoスキームで使える予算の総額(atomic units) */
+  /** Permit2 allowance: total budget available to the upto scheme, in atomic units. */
   allowance: string;
 };
 
 /**
- * ERC20トークンの残高とPermit2へのallowanceを取得する。
+ * Gets the ERC-20 token balance and Permit2 allowance.
  * @param owner
  * @param token
  * @returns
@@ -54,8 +54,9 @@ export const readBalances = async (
 };
 
 /**
- * Permit2へのallowanceを設定する。
- * 署名はPrivy(委任キー+ポリシー)、送信は自前のRPCで行う(PrivyのArc対応に依存しない)。
+ * Sets the Permit2 allowance.
+ * Privy signs with the delegated key and policy, while the app submits through its own RPC
+ * so the flow does not depend on Privy's Arc support.
  */
 export const approveBudget = async (
   chain: Chain,

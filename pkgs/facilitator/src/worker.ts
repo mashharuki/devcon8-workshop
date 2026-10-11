@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { createApp } from "./app.js";
 import { createFacilitator } from "./facilitator.js";
 
-// appは不変でリクエスト状態を持たないため、isolate内で1回だけ作ってキャッシュする
+// The app is immutable and holds no request state, so create and cache it once per isolate
 let app: Hono | undefined;
 
 export default {
@@ -11,7 +11,7 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Response | Promise<Response> {
-    // 未設定のままだと分かりにくいエラーになるため、先に検証する
+    // Validate first to avoid unclear errors when configuration is missing
     const privateKey: unknown = env.EVM_PRIVATE_KEY;
     if (typeof privateKey !== "string" || privateKey.length === 0) {
       const message = "facilitator misconfigured: missing EVM_PRIVATE_KEY";
@@ -19,7 +19,7 @@ export default {
       return Response.json({ error: message }, { status: 500 });
     }
     try {
-      // CHAIN_NAME の不足や不正は createFacilitator の中でキー名つきのエラーになる
+      // createFacilitator reports a missing or invalid CHAIN_NAME with an error naming the key
       app ??= createApp(createFacilitator(env));
     } catch (error) {
       const message = `facilitator misconfigured: ${error instanceof Error ? error.message : "Unknown error"}`;

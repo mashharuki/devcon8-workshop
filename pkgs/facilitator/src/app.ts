@@ -7,7 +7,7 @@ import type {
 } from "@x402/core/types";
 import { Hono } from "hono";
 
-/** /verify /settle /supported /health を提供するHonoアプリを作成する */
+/** Creates a Hono app that provides /verify, /settle, /supported, and /health. */
 export const createApp = (facilitator: x402Facilitator): Hono => {
   const app = new Hono();
 
@@ -15,11 +15,11 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
   // ========================================
 
   /**
-   * 署名済みの支払いペイロードと支払い要件を検証するエンドポイント
+   * Endpoint that validates a signed payment payload against its payment requirements.
    */
   app.post("/verify", async (c) => {
     try {
-      // リクエストボディをJSONとしてパース
+      // Parse the request body as JSON
       const body = await c.req.json<{
         paymentPayload?: PaymentPayload;
         paymentRequirements?: PaymentRequirements;
@@ -36,7 +36,7 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
         );
       }
 
-      // ファシリテーターのverifyメソッドを呼び出して検証
+      // Validate by calling the facilitator's verify method
       const response: VerifyResponse = await facilitator.verify(
         paymentPayload,
         paymentRequirements,
@@ -60,11 +60,11 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
   // ========================================
 
   /**
-   * 署名済みの支払いペイロードと支払い要件を使用して決済を行うエンドポイント
+   * Endpoint that settles a signed payment payload against its payment requirements.
    */
   app.post("/settle", async (c) => {
     try {
-      // リクエストボディをJSONとしてパース
+      // Parse the request body as JSON
       const body = await c.req.json<{
         paymentPayload?: PaymentPayload;
         paymentRequirements?: PaymentRequirements;
@@ -81,7 +81,7 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
         );
       }
 
-      // ファシリテーターのsettleメソッドを呼び出して決済(トランザクションを流す)
+      // Settle by calling the facilitator's settle method (submits the transaction)
       const response: SettleResponse = await facilitator.settle(
         paymentPayload,
         paymentRequirements,
@@ -98,7 +98,7 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
         const response: SettleResponse = {
           success: false,
           errorReason: error.message.replace("Settlement aborted: ", ""),
-          // 中断時は未送信のため transaction は空文字、network は不明として型を合わせる
+          // No transaction was submitted after cancellation; use an empty transaction and unknown network to satisfy the type
           transaction: "",
           network: "unknown" as SettleResponse["network"],
         };
@@ -120,7 +120,7 @@ export const createApp = (facilitator: x402Facilitator): Hono => {
   // ========================================
 
   /**
-   * サポートされているスキームとネットワークを返すエンドポイント
+   * Endpoint that returns the supported schemes and networks.
    */
   app.get("/supported", (c) => {
     try {

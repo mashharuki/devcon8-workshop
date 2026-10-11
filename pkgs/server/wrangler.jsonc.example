@@ -9,6 +9,6 @@
     "traces": { "enabled": true }
   },
   "vars": {
-    "FACILITATOR_URL": "<facilitatorのURL>"
+    "FACILITATOR_URL": "<facilitator URL>"
   }
 }

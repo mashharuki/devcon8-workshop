@@ -5,7 +5,7 @@ import { createApp } from "./app.js";
 import { createFacilitator } from "./facilitator.js";
 
 dotenv.config();
-// チェーンは共有設定(pkgs/config/.env の CHAIN_NAME)から読み込む
+// Load the chain from the shared configuration (CHAIN_NAME in pkgs/config/.env)
 loadSharedEnv();
 
 const PORT = Number(process.env.PORT ?? 4022);
@@ -15,7 +15,7 @@ if (!process.env.EVM_PRIVATE_KEY) {
   process.exit(1);
 }
 
-// CHAIN_NAME の不足や不正は createFacilitator の中で検出され、キー名つきのエラーになる
+// createFacilitator detects a missing or invalid CHAIN_NAME and returns an error naming the key
 let facilitator: ReturnType<typeof createFacilitator>;
 try {
   facilitator = createFacilitator({

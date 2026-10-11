@@ -2,25 +2,25 @@ import { type Chain, parseUnits } from "viem";
 import * as viemChains from "viem/chains";
 
 /**
- * チェーン・トークン・価格の設定を環境変数から読み込む共通ロジック
+ * Shared logic for loading chain, token, and pricing configuration from environment variables.
  *
- * 値そのものはコードに書かず、各パッケージの `.env`(Workers では wrangler.jsonc の vars)に書く。
- * このファイルは「どの変数名をどう解釈するか」だけを持つ。
- * 必須の変数が足りない場合は、値ではなくキー名だけをまとめたエラーを投げる。
+ * Values belong in each package's `.env` (or `vars` in wrangler.jsonc for Workers), not in code.
+ * This file only defines how each variable name is interpreted.
+ * When required variables are missing, the error lists only their key names, never their values.
  *
- * envには process.env でも Workers の env バインディングでも渡せる。
+ * env can be either process.env or a Workers env binding.
  */
 
 type EnvLike = object;
 
 /**
- * pkgs/config/.env に書く共有設定(Workers には deploy / dev のスクリプトが --var で渡す)
- * Workers の `Env` にはこの型を足している(各パッケージの src/env.d.ts)
+ * Shared configuration stored in pkgs/config/.env (the deploy/dev scripts pass it to Workers with --var).
+ * This type is added to each Worker's `Env` in the package's src/env.d.ts.
  */
 export type SharedEnv = {
   CHAIN_NAME: string;
   ASSET_ADDRESS: string;
-  /** 支払いの受取先。serverの payTo と、mcpのPrivyポリシーが許可する送金先の両方に使う */
+  /** Payment recipient, used as the server's payTo and as the destination allowed by the MCP Privy policy. */
   PAYEE_ADDRESS: string;
   TOKEN_NAME: string;
   TOKEN_VERSION: string;
@@ -28,7 +28,7 @@ export type SharedEnv = {
   PRICE_WEATHER: string;
   USAGE_UNIT_PRICE: string;
   USAGE_MAX_AMOUNT: string;
-  /** 1回の支払いの上限(atomic units)。省略時は各パッケージの既定値 */
+  /** Per-payment limit in atomic units. Each package supplies its own default when omitted. */
   MAX_AMOUNT_PER_PAYMENT?: string;
 };
 
@@ -37,7 +37,7 @@ const readEnv = (env: EnvLike, key: string): string | undefined => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-/** 必須キーがすべてあることを確認し、足りなければキー名だけを列挙して投げる */
+/** Ensures all required keys are present and throws an error listing only missing key names. */
 const requireEnv = <K extends string>(
   env: EnvLike,
   keys: readonly K[],
@@ -53,7 +53,7 @@ const requireEnv = <K extends string>(
   ) as Record<K, string>;
 };
 
-// ===== チェーン =====
+// ===== Chain =====
 
 const isChain = (value: unknown): value is Chain =>
   typeof value === "object" &&
@@ -63,8 +63,8 @@ const isChain = (value: unknown): value is Chain =>
   "rpcUrls" in value;
 
 /**
- * CHAIN_NAME(viem/chains のエクスポート名。例: arcTestnet, baseSepolia)からチェーン定義を返す
- * 切り替え後は、facilitatorのウォレットにそのチェーンのガス代を入れること。
+ * Returns a chain definition from CHAIN_NAME (an export name from viem/chains, such as arcTestnet or baseSepolia).
+ * After switching chains, fund the facilitator wallet with gas for the new chain.
  */
 export const getChain = (env: EnvLike): Chain => {
   const { CHAIN_NAME } = requireEnv(env, ["CHAIN_NAME"]);
@@ -77,11 +77,11 @@ export const getChain = (env: EnvLike): Chain => {
   return chain;
 };
 
-/** CAIP-2形式のチェーンID(例: eip155:5042002) */
+/** Chain ID in CAIP-2 format (for example, eip155:5042002). */
 export const getChainId = (env: EnvLike): `${string}:${string}` =>
   `eip155:${getChain(env).id}`;
 
-// ===== 決済トークン =====
+// ===== Payment token =====
 
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 
@@ -93,24 +93,24 @@ const readAddress = (env: EnvLike, key: string): `0x${string}` => {
   return value as `0x${string}`;
 };
 
-/** 決済トークンのアドレス(ASSET_ADDRESS) */
+/** Payment token address (ASSET_ADDRESS). */
 export const getTokenAddress = (env: EnvLike): `0x${string}` =>
   readAddress(env, "ASSET_ADDRESS");
 
-/** 支払いの受取先アドレス(PAYEE_ADDRESS)。serverのpayToとmcpの許可する送金先に使う */
+/** Payment recipient address (PAYEE_ADDRESS), used by the server's payTo and the MCP allowlist. */
 export const getPayeeAddress = (env: EnvLike): `0x${string}` =>
   readAddress(env, "PAYEE_ADDRESS");
 
 export type Token = {
   address: `0x${string}`;
-  /** トークンのEIP-712ドメイン。オンチェーンの name() と一致させる */
+  /** Token EIP-712 domain name; must match the on-chain name(). */
   name: string;
-  /** トークンのEIP-712ドメイン。オンチェーンの version() と一致させる(違うとverifyがrevertする) */
+  /** Token EIP-712 domain version; must match the on-chain version() or verify will revert. */
   version: string;
   decimals: number;
 };
 
-/** トークンの全情報。server のように署名検証用のドメインが必要な場合に使う */
+/** Full token metadata, used when a component such as the server needs a domain for signature verification. */
 export const getToken = (env: EnvLike): Token => {
   const { TOKEN_NAME, TOKEN_VERSION, TOKEN_DECIMALS } = requireEnv(env, [
     "TOKEN_NAME",
@@ -129,23 +129,23 @@ export const getToken = (env: EnvLike): Token => {
   };
 };
 
-// ===== 価格(トークンの単位。USDCなら "0.5" = 0.5 USDC) =====
+// ===== Pricing in token units (for USDC, "0.5" = 0.5 USDC) =====
 
 export type Pricing = {
-  /** GET /weather(exact): 1リクエストの固定料金(atomic units) */
+  /** GET /weather (exact): fixed price per request in atomic units. */
   weather: string;
-  /** GET /usage(upto): 1ユニットあたりの料金(atomic units) */
+  /** GET /usage (upto): price per unit in atomic units. */
   usageUnit: bigint;
-  /** GET /usage(upto): クライアントが署名で認可する最大額(atomic units) */
+  /** GET /usage (upto): maximum amount the client authorizes by signature, in atomic units. */
   usageMax: string;
 };
 
 /**
- * 金額をatomic unitに変換する
- * @param key 
- * @param amount 
- * @param decimals 
- * @returns 
+ * Converts an amount to atomic units.
+ * @param key
+ * @param amount
+ * @param decimals
+ * @returns
  */
 const toAtomic = (key: string, amount: string, decimals: number): bigint => {
   try {
@@ -156,9 +156,9 @@ const toAtomic = (key: string, amount: string, decimals: number): bigint => {
 };
 
 /**
- * 現在の環境設定に基づいて価格情報を取得するメソッド
- * @param env 
- * @returns 
+ * Returns pricing derived from the current environment configuration.
+ * @param env
+ * @returns
  */
 export const getPricing = (env: EnvLike): Pricing => {
   const { decimals } = getToken(env);

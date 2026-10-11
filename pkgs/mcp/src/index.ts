@@ -6,15 +6,15 @@ import { createMcpServer, registerTools } from "./lib/tools.js";
 import { parseEnv } from "./utils/env.js";
 import { createFileStore } from "./utils/store.node.js";
 
-// cwdに依存せず、パッケージ直下の .env を読む(MCPはClaude Codeから任意のcwdで起動されうる)
+// Read the package's .env regardless of cwd (Claude Code may start MCP from any directory)
 dotenv.config({
   path: fileURLToPath(new URL("../.env", import.meta.url)),
   quiet: true,
 });
-// チェーン・トークンは共有設定(pkgs/config/.env)から読み込む
+// Load the chain and token from the shared configuration (pkgs/config/.env)
 loadSharedEnv();
 
-// MCPのstdioはプロトコル専用なので、ログは必ず stderr に出す(console.error)
+// MCP stdio is reserved for the protocol, so always send logs to stderr (console.error)
 
 const server = createMcpServer();
 registerTools(server, {

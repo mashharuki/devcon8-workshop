@@ -1,6 +1,6 @@
 import type { SharedEnv } from "@x402-sample/config";
 
-// Workers の Env に、deploy / dev のスクリプトが --var で渡す共有設定の型を足す
+// Extend the Workers Env with shared configuration passed by the deploy/dev scripts through --var
 declare global {
   interface Env extends SharedEnv {}
 }

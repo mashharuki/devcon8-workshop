@@ -5,7 +5,7 @@ import { createApp } from "./app";
 import type { ServerEnv } from "./config";
 
 dotenv.config();
-// チェーン・トークン・価格は共有設定(pkgs/config/.env)から読み込む
+// Load the chain, token, and pricing from the shared configuration (pkgs/config/.env)
 loadSharedEnv();
 
 const { FACILITATOR_URL } = process.env;
@@ -14,7 +14,7 @@ if (!FACILITATOR_URL) {
   process.exit(1);
 }
 
-// チェーン・トークン・価格の不足や不正は createApp の中で検出され、キー名つきのエラーになる
+// createApp detects missing or invalid chain, token, or pricing values and returns an error naming the key
 let app: ReturnType<typeof createApp>;
 try {
   app = createApp(process.env as unknown as ServerEnv);

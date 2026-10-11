@@ -9,32 +9,32 @@ import "dotenv/config";
 import { signer } from "./viem";
 
 dotenv.config();
-// チェーン・トークンは共有設定(pkgs/config/.env)から読み込む
+// Load the chain and token from the shared configuration (pkgs/config/.env)
 loadSharedEnv();
 
-// チェーンとトークンは .env(CHAIN_NAME / ASSET_ADDRESS)から読み込む。解釈は pkgs/config/src/index.ts にある
+// Load the chain and token from .env (CHAIN_NAME / ASSET_ADDRESS); parsing is defined in pkgs/config/src/index.ts
 const NETWORK = getChainId(process.env);
 const ASSET = getTokenAddress(process.env);
 
-// 1回の支払いで署名を許可する上限(atomic units, USDCはdecimals=6なので 1000000 = 1 USDC)。省略可
-// 超える要求は署名する前にclient側で拒否される
+// Optional per-payment signing limit (atomic units; USDC has 6 decimals, so 1000000 = 1 USDC)
+// The client rejects requests above this limit before signing
 export const DEFAULT_MAX_AMOUNT_PER_PAYMENT =
   process.env.MAX_AMOUNT_PER_PAYMENT ?? "1000000";
 
 /**
- * 支払い用のx402クライアントを作成する
- * @param maxAmountPerPayment 1回の支払いの上限(atomic units)
+ * Creates an x402 client for payments.
+ * @param maxAmountPerPayment Per-payment limit (atomic units)
  */
 export const createPaymentClient = (
   maxAmountPerPayment: string = DEFAULT_MAX_AMOUNT_PER_PAYMENT,
 ): x402Client => {
   const client = new x402Client();
 
-  // 固定額決済(exact)と使用量課金(upto)の両方を登録
+  // Register both fixed-price (exact) and usage-based (upto) payment schemes
   client.register(NETWORK, new ExactEvmScheme(signer));
   client.register(NETWORK, new UptoEvmScheme(signer));
 
-  // デフォルト以外のアセットを指定する場合はここで指定する必要あり
+  // A non-default asset must be specified here
   client.setSpendControls({
     allowedAssets: [
       {
@@ -55,5 +55,5 @@ export const api = wrapAxiosWithPayment(
   axios.create({ baseURL: process.env.PAYWALL_API_BASE_URL }),
   client,
 );
-// x402 の HTTP クライアントを作成
+// Create the x402 HTTP client
 export const httpClient = new x402HTTPClient(client);

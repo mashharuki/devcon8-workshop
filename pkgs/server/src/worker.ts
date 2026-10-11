@@ -1,10 +1,10 @@
 import type { Hono } from "hono";
 import { createApp } from "./app";
 
-// appは不変でリクエスト状態を持たないため、isolate内で1回だけ作ってキャッシュする
+// The app is immutable and holds no request state, so create and cache it once per isolate
 let app: Hono | undefined;
 
-// 必須の環境変数(エラーには値ではなくキー名のみを出す)
+// Required environment variables (errors include key names only, never values)
 const REQUIRED_KEYS = ["FACILITATOR_URL"] as const;
 
 export default {
@@ -13,7 +13,7 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Response | Promise<Response> {
-    // 未設定のままだと分かりにくいエラーになるため、先に検証する
+    // Validate first to avoid unclear errors when configuration is missing
     const missing = REQUIRED_KEYS.filter((key) => {
       const value: unknown = env[key];
       return typeof value !== "string" || value.length === 0;
@@ -24,7 +24,7 @@ export default {
       return Response.json({ error: message }, { status: 500 });
     }
     try {
-      // チェーン・トークン・価格の不足や不正は createApp の中でキー名つきのエラーになる
+      // createApp reports missing or invalid chain, token, or pricing values with an error naming the key
       app ??= createApp(env);
     } catch (error) {
       const message = `server misconfigured: ${error instanceof Error ? error.message : "Unknown error"}`;
