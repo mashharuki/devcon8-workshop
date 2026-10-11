@@ -21,7 +21,7 @@
   ],
   "vars": {
     "PAYWALL_API_BASE_URL": "<serverのURL>",
-    "ALLOWED_ORIGINS": "",
+    "ALLOWED_ORIGINS": "http://localhost:5173",
     "PRIVY_APP_ID": "<あなたのPrivy App ID>",
     "PRIVY_CLIENT_ID": "<あなたのPrivy Client ID>",
     "PRIVY_ORIGIN": "<このmcp WorkerのURL>"

@@ -383,6 +383,25 @@ curl -s -i https://<serverのURL>/weather
 claude mcp add --transport http x402-arc-remote https://<mcpのURL>/mcp
 ```
 
+もしくは、 `.claude/.mcp.json`を作成してMCPサーバーを登録してください。
+
+```json
+{
+  "mcpServers": {
+    "x402-arc-demo": {
+      "type": "http",
+      "url": "https://x402-arc-mcp.<subdomain>.workers.dev/mcp"
+    }
+  }
+}
+```
+
+そのあと、以下のコマンドで Claude Codeを起動してください。
+
+```bash
+claude --mcp-config=./.claude/.mcp.json
+```
+
 登録後、Claude Codeで`/mcp`を実行して接続状態を確認してください。
 
 ### 3. 自然言語でx402決済を実行する

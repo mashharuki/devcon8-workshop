@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "x402-arc-demo": {
+      "type": "http",
+      "url": "https://x402-arc-mcp.<subdomain>.workers.dev/mcp"
+    }
+  }
+}

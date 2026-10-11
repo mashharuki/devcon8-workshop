@@ -10,3 +10,5 @@ pkgs/mcp/wrangler.jsonc
 worker-configuration.d.ts
 dist/
 docs/output/
+# Claude MCP Settings
+.claude/.mcp.json
