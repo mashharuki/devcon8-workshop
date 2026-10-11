@@ -7,5 +7,6 @@ node_modules
 pkgs/server/wrangler.jsonc
 pkgs/mcp/wrangler.jsonc
 .wrangler/
+worker-configuration.d.ts
 dist/
 docs/output/
