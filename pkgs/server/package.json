@@ -1,0 +1,35 @@
+{
+  "name": "x402server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.worker.json",
+    "dev": "tsx watch src/index.ts",
+    "cf:typecheck": "wrangler types && tsc -p tsconfig.worker.json",
+    "cf:dev": "node ../../scripts/wrangler.mjs dev --port 8789",
+    "cf:deploy": "node ../../scripts/wrangler.mjs deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@x402-sample/config": "workspace:*",
+    "@x402/core": "^2.23.0",
+    "@x402/evm": "^2.23.0",
+    "@x402/extensions": "^2.23.0",
+    "@x402/hono": "^2.23.0",
+    "dotenv": "^17.4.2",
+    "hono": "^4.13.3",
+    "tsx": "^4.23.12",
+    "viem": "^2.55.19"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.136.1"
+  }
+}

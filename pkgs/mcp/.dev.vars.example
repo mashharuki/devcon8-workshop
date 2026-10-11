@@ -1,0 +1,4 @@
+PRIVY_APP_SECRET=dummy-secret
+PRIVY_APP_ID=dummy-app-id
+PRIVY_CLIENT_ID=dummy-client-id
+PAYWALL_API_BASE_URL=http://localhost:4021
