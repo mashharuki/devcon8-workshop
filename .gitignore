@@ -1,0 +1,12 @@
+**/.env
+**/.DS_Store
+node_modules
+.run/*
+# Cloudflare Workers
+.dev.vars
+pkgs/server/wrangler.jsonc
+pkgs/mcp/wrangler.jsonc
+.wrangler/
+worker-configuration.d.ts
+dist/
+docs/output/
