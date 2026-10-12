@@ -1,0 +1,77 @@
+<mxfile host="app.diagrams.net" version="24.7.0">
+  <diagram name="Architecture" id="arch">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="680" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Agent -->
+        <mxCell id="agent" value="AI Agent&#10;(Claude Code, via MCP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Cloudflare container -->
+        <mxCell id="cfBox" value="Cloudflare account (one workers.dev zone)" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontStyle=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="20" width="560" height="560" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mcp" value="mcp Worker&#10;Durable Object: X402Mcp&#10;Streamable HTTP /mcp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="380" y="60" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="server" value="server Worker&#10;x402 resource server&#10;GET /weather, /usage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="380" y="260" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="facilitator" value="facilitator Worker&#10;POST /verify /settle&#10;GET /supported" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="380" y="460" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Privy -->
+        <mxCell id="privy" value="Privy&#10;email OTP auth&#10;policy-limited delegate signer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="960" y="60" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Arc Testnet -->
+        <mxCell id="chain" value="Arc Testnet (eip155:5042002)&#10;USDC (FiatTokenV2) + Permit2&#10;RPC: rpc.testnet.arc.network" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="960" y="460" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Local dev note -->
+        <mxCell id="localNote" value="Local dev (same source code)&#10;tsx watch src/index.ts&#10;:4022 / :4021 / stdio" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="460" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" value="&#9312; Streamable HTTP /mcp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="agent" target="mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="&#9313; email OTP / sign&#10;(delegate key)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mcp" target="privy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="&#9314; balanceOf / allowance /&#10;approve (broadcast)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.8;entryX=0;entryY=0.5;" edge="1" parent="1" source="mcp" target="chain">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="880" y="123" />
+              <mxPoint x="880" y="505" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" value="&#9315; pay_and_fetch (HTTPS)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mcp" target="server">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="&#9316; verify / settle&#10;(global_fetch_strictly_public)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="server" target="facilitator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="&#9317; transferWithAuthorization&#10;(broadcast)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="facilitator" target="chain">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend: blue = agent / caller, orange = mcp Worker, green = resource server, purple = facilitator, yellow = Privy, teal = chain" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="1160" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
