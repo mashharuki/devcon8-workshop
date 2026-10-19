@@ -9,8 +9,8 @@ import {
 } from "viem";
 import { fail, ok, type Result, toMessage } from "../utils/result.js";
 
-const createChainClient = (chain: Chain) =>
-  createPublicClient({ chain, transport: http() });
+const createChainClient = (chain: Chain, rpcUrl?: string) =>
+  createPublicClient({ chain, transport: http(rpcUrl) });
 
 export type WalletBalances = {
   /** Token balance in atomic units. */
@@ -29,9 +29,10 @@ export const readBalances = async (
   chain: Chain,
   owner: `0x${string}`,
   token: `0x${string}`,
+  rpcUrl?: string,
 ): Promise<Result<WalletBalances>> => {
   try {
-    const publicClient = createChainClient(chain);
+    const publicClient = createChainClient(chain, rpcUrl);
     const [balance, allowance] = await Promise.all([
       publicClient.readContract({
         address: token,
@@ -63,13 +64,14 @@ export const approveBudget = async (
   account: PrivyViemAccount,
   token: `0x${string}`,
   amount: bigint,
+  rpcUrl?: string,
 ): Promise<Result<{ hash: string; status: string }>> => {
   try {
-    const publicClient = createChainClient(chain);
+    const publicClient = createChainClient(chain, rpcUrl);
     const walletClient = createWalletClient({
       account,
       chain,
-      transport: http(),
+      transport: http(rpcUrl),
     });
     const hash = await walletClient.writeContract({
       address: token,

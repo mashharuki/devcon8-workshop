@@ -24,6 +24,7 @@
     "ALLOWED_ORIGINS": "http://localhost:5173",
     "PRIVY_APP_ID": "<your Privy App ID>",
     "PRIVY_CLIENT_ID": "<your Privy Client ID>",
-    "PRIVY_ORIGIN": "<this MCP Worker's URL>"
+    "PRIVY_ORIGIN": "<this MCP Worker's URL>",
+    "RPC_URL": "https://rpc.testnet.arc.io",
   }
 }

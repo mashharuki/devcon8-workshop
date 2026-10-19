@@ -166,10 +166,12 @@ Because the next steps transfer funds on-chain, you need addresses for the **pay
 
 Copy the private keys from **MetaMask**:
 
-1. Create two **new accounts dedicated to this workshop** in MetaMask, for example `x402-client` and `x402-facilitator`.
-2. For each account, open **︙ (Account details) -> Show private key**, enter your password, and copy the private key.
+1. Create three **new accounts dedicated to this workshop** in MetaMask, for example `x402-client`, `x402-facilitator` and `x402-payee`. You need private keys only for the first two; the payee account needs just its address.
+2. For the client and facilitator accounts, open **︙ (Account details) -> Show private key**, enter your password, and copy the private key.
+![MetaMask: Account details and Show private key](./images/metamask-show-private-key.png)
+
 3. Put the client account's private key in `pkgs/client/.env` and the facilitator account's private key in `pkgs/facilitator/.env` as `EVM_PRIVATE_KEY`. Use the format beginning with `0x`.
-4. Set `PAYEE_ADDRESS` to a recipient address **different from the client address**. If they are the same, the wallet sends funds to itself and the balance does not clearly demonstrate settlement. Creating one more MetaMask account for the recipient is the easiest option.
+4. Set `PAYEE_ADDRESS` to the `x402-payee` account's address (copy the address only, not the private key). It must be **different from the client address**. If they are the same, the wallet sends funds to itself and the balance does not clearly demonstrate settlement.
 
 > ⚠️ Use private keys from **test-only wallets**. Never enter the private key for your primary wallet. The `.env` files are excluded from Git, but you must also avoid posting their contents in chat or elsewhere.
 
@@ -183,6 +185,8 @@ Open the [Circle Faucet](https://faucet.circle.com/), select **Arc Testnet**, an
 
 - Client address: at least **2 USDC**
 - Facilitator address: a small amount for gas
+
+![Circle Faucet: select Arc Testnet and enter an address](./images/faucet-arc-testnet.jpg)
 
 > USDC is also Arc's gas token, so you do not need a separate gas token.
 
@@ -219,15 +223,53 @@ curl localhost:4021/health
 
 The `/supported` response should list the facilitator's supported payment schemes, `exact` and `upto`, and the network `eip155:5042002`.
 
+```json
+{
+  "kinds": [
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:5042002"
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:5042002",
+      "extra": {
+        "facilitatorAddress": "0x3e5fE9717398d98Aae8A8F435Bf8c29C5aa0d18b"
+      }
+    }
+  ],
+  "extensions": [],
+  "signers": {
+    "eip155:*": [
+      "0x3e5fE9717398d98Aae8A8F435Bf8c29C5aa0d18b"
+    ]
+  }
+}
+```
+
+```json
+{
+  "report": {
+    "status": "OK"
+  }
+}
+```
+
 ### 2. Confirm the unpaid response (HTTP 402)
 
 First, call the paid API without paying:
 
 ```bash
-curl -i localhost:4021/weather
+curl -i http://localhost:4021/weather
 ```
 
 The response should be `HTTP/1.1 402 Payment Required`. The `PAYMENT-REQUIRED` header contains Base64-encoded payment requirements such as the **price, recipient, and chain**. The client reads these values to learn how to pay.
+
+```bash
+HTTP/1.1 402 Payment Required
+```
 
 ### 3. Pay and retrieve data with the client
 
@@ -237,7 +279,11 @@ pnpm x402client run dev
 
 The client automatically performs steps ③ through ⑪ from the earlier diagram: receive the 402, sign, retry with payment, and retrieve the data. If you see weather data and `Payment settled` with `success: true` and a transaction hash, the payment succeeded. 🎉
 
+![Client output: weather data and Payment settled](./images/client-payment-success.jpg)
+
 You can inspect the transaction in the [Arc Testnet Explorer](https://explorer.testnet.arc.io/).
+
+![Arc Testnet Explorer: the settlement transaction](./images/explorer-transaction.jpg)
 
 ### 4. Try usage-based payments with the `upto` scheme
 
@@ -262,6 +308,8 @@ The test succeeds when all three cases report `PASS`:
 - A payment within the signed cap, 0.3 USDC, is settled.
 - A 1.0 USDC payment above the 0.5 USDC signed cap is rejected.
 - A request above the client's `MAX_AMOUNT_PER_PAYMENT` limit is rejected before signing.
+
+![Guardrail scenarios: three PASS results](./images/guardrails-pass.png)
 
 This demonstrates how multiple payment limits work together when an AI agent handles money.
 
@@ -291,13 +339,21 @@ pnpm --filter facilitator exec wrangler whoami
 The MCP server uses email login to create a **wallet dedicated to the AI agent**. Complete the following steps in the [Privy Dashboard](https://dashboard.privy.io):
 
 1. Enable **Email** login.
+
+   ![Privy Dashboard: enable Email login](./images/privy-email-login.jpg)
+
 2. Record the **App ID**, **App Secret**, and **Client ID**.
+
+   ![Privy Dashboard: App ID, App Secret and Client ID (blur the secret)](./images/privy-app-keys.jpg)
+
    - `PRIVY_APP_ID` and `PRIVY_CLIENT_ID` are public values and belong in `vars` in `pkgs/mcp/wrangler.jsonc`. Add `PRIVY_APP_SECRET` as a secret in the next step.
 3. Add the deployed MCP Worker's origin to **Allowed origins**, for example `https://x402-arc-mcp.<your-subdomain>.workers.dev`.
    - You can determine the MCP Worker URL before deployment from the Worker name, `x402-arc-mcp`, and your `workers.dev` subdomain.
    - Find the subdomain in the [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages) dashboard. You can also inspect the account with `pnpm --filter facilitator exec wrangler whoami`.
    - Add `http://localhost:5173` as well if you will test locally.
    - Privy rejects login requests from origins not registered in the dashboard. If you skip this step, login fails with `Origin not allowed`.
+
+   ![Privy Dashboard: Allowed origins](./images/privy-allowed-origins.jpg)
 
 ### 3. Register secrets
 
@@ -311,6 +367,24 @@ pnpm --filter x402mcp exec wrangler secret put PRIVY_APP_SECRET
 > ⚠️ `PRIVY_APP_SECRET` has powerful permissions that can create wallets for every user in the app. Never share it or commit it to Git.
 
 The first `wrangler secret put` may ask whether to create the Worker because it does not exist yet. Enter `Y` to continue.
+
+```bash
+ ⛅️ wrangler 4.136.1 (update available 4.151.1)
+───────────────────────────────────────────────
+✔ Enter a secret value: … *
+🌀 Creating the secret for the Worker "x402-arc-facilitator"
+✔ There doesn't seem to be a Worker called "x402-arc-facilitator". Do you want to create a new Worker with that name and add secrets to it? … yes
+🌀 Creating new Worker "x402-arc-facilitator"...
+✨ Success! Uploaded secret EVM_PRIVATE_KEY
+
+ ⛅️ wrangler 4.136.1 (update available 4.151.1)
+───────────────────────────────────────────────
+✔ Enter a secret value: … *
+🌀 Creating the secret for the Worker "x402-arc-mcp"
+✔ There doesn't seem to be a Worker called "x402-arc-mcp". Do you want to create a new Worker with that name and add secrets to it? … yes
+🌀 Creating new Worker "x402-arc-mcp"...
+✨ Success! Uploaded secret PRIVY_APP_SECRET
+```
 
 ### 4. Deploy in the required order
 
@@ -377,6 +451,44 @@ curl -s -i https://<server-URL>/weather
 
 As with the local services, deployment succeeded if `/supported` returns data and `/weather` returns `402`.
 
+```json
+{
+  "kinds": [
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:5042002"
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:5042002",
+      "extra": {
+        "facilitatorAddress": "0x3e5fE9717398d98Aae8A8F435Bf8c29C5aa0d18b"
+      }
+    }
+  ],
+  "extensions": [],
+  "signers": {
+    "eip155:*": [
+      "0x3e5fE9717398d98Aae8A8F435Bf8c29C5aa0d18b"
+    ]
+  }
+}
+```
+
+```json
+{
+  "report": {
+    "status": "OK"
+  }
+}
+```
+
+```bash
+HTTP/2 402 
+```
+
 ### 2. Register the MCP server with Claude Code
 
 ```bash
@@ -404,6 +516,8 @@ claude --mcp-config=./.claude/.mcp.json
 
 After registration, run `/mcp` in Claude Code to confirm the connection.
 
+![Claude Code /mcp showing x402-arc-remote connected](./images/claude-mcp-connected.jpg)
+
 ### 3. Make x402 payments with natural language
 
 After registering the MCP server, Claude Code can use the following tools. You can create a wallet and make payments entirely through natural-language instructions:
@@ -419,6 +533,10 @@ Try giving Claude Code the following prompt:
 
 > Check my wallet status. If I do not have a wallet yet, guide me through signing in by email and creating one.
 
+![Claude Code: wallet login with email one-time code](./images/claude-wallet-login.jpg)
+
+![Claude Code: wallet login with email one-time code](./images/claude-wallet-login2.jpg)
+
 After the wallet is created, use the [Circle Faucet](https://faucet.circle.com/) to fund the displayed address with USDC on **Arc Testnet**, then ask:
 
 > Set my budget to 2 USDC. Confirm the amount with me before executing. Then perform each of the following in order and report the result:
@@ -430,6 +548,10 @@ Expected results:
 
 - Steps 1 and 2: settlement succeeds.
 - Step 3: the facilitator rejects the request with `invalid_upto_evm_payload_settlement_exceeds_amount`, and **no funds are charged**.
+
+![Claude Code: set_budget confirmation and payment results](./images/$claude-pay-results$.jpg)
+
+![Claude Code: over-cap payment rejected](./images/claude-guardrail-rejected.jpg)
 
 > 💡 The rejection in step 3 is not a failure; it proves that the **guardrail works correctly**. The same mechanism that blocked over-cap settlement locally also protects payments made through the AI agent.
 

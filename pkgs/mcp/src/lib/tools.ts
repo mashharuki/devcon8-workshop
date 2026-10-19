@@ -100,6 +100,7 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
           getChain(env),
           state.data.address as `0x${string}`,
           env.ASSET_ADDRESS as `0x${string}`,
+          env.RPC_URL,
         );
         return fromResult(balances, (b) => ({
           needsWallet: false,
@@ -227,6 +228,7 @@ export const registerTools = (server: McpServer, deps: ToolDeps): void => {
           account,
           env.ASSET_ADDRESS as `0x${string}`,
           value,
+          env.RPC_URL,
         );
         return fromResult(approved, (r) => r);
       }),

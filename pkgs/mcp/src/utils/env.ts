@@ -23,6 +23,8 @@ const envSchema = z.object({
   MAX_AMOUNT_PER_PAYMENT: atomic.default("1000000"),
   // Maximum budget set_budget can approve at once, in atomic units
   MAX_BUDGET: atomic.default("10000000"),
+  // Optional override for the chain's default RPC URL (e.g. when it is down)
+  RPC_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
